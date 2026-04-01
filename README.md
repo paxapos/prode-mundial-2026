@@ -23,9 +23,19 @@ Reglas opcionales para desempate:
 ## 2) Participantes
 
 Cada participante debe tener:
+- Usuario para iniciar sesion.
+- Clave.
 - Nombre (unico dentro del torneo).
 - Fecha de alta.
 - Estado (activo/inactivo).
+
+Regla operativa inicial:
+- Si no existe ningun usuario, el primero que se registra/inicia sesion se crea automaticamente como administrador.
+- Luego de eso, los nuevos usuarios se crean desde el panel de administracion.
+
+Roles:
+- player: puede iniciar sesion y cargar su prode.
+- admin: puede jugar y ademas administrar usuarios, reglas, bloqueo global y resultados.
 
 Ejemplo:
 - Juan Perez
@@ -126,13 +136,16 @@ Para una primera version:
 Stack recomendado:
 - Frontend/App: SvelteKit.
 - Estilos: Tailwind CSS.
-- UI: Flowbite para Svelte.
 - Base de datos: Turso (libSQL).
 - Acceso a datos: Drizzle ORM con driver libSQL.
+- Adaptador de produccion: @sveltejs/adapter-node.
+- Autenticacion actual: usuario + clave con sesiones persistentes en base de datos.
 
 Variables de entorno necesarias:
 - TURSO_DATABASE_URL
 - TURSO_AUTH_TOKEN
+- SESSION_DURATION_DAYS
+- ORIGIN
 
 Modelo de datos inicial sugerido:
 
@@ -202,7 +215,64 @@ Endpoints server (ejemplo):
 8. Tabla de posiciones y desempates.
 9. Soporte completo de llaves hasta la final.
 
-## 9) Criterios de aceptacion iniciales
+## 9) Puesta en marcha local
+
+1. Instalar dependencias:
+
+```bash
+pnpm install
+```
+
+2. Crear variables de entorno:
+
+```bash
+cp .env.example .env
+```
+
+3. Levantar la app:
+
+```bash
+pnpm dev
+```
+
+4. Abrir login y crear el primer usuario. Ese usuario sera administrador automaticamente si todavia no existe ninguno.
+
+## 10) Despliegue a produccion
+
+Comandos principales:
+
+```bash
+pnpm check
+pnpm build
+pnpm start
+```
+
+Base de datos:
+- La app usa Turso/libSQL.
+- Si no se define TURSO_DATABASE_URL, por defecto usa file:local.db para desarrollo local.
+- El schema base tambien esta definido en drizzle.config.ts y drizzle/0000_initial.sql.
+
+Comandos utiles de base:
+
+```bash
+pnpm db:generate
+pnpm db:push
+```
+
+Contenedor:
+- Hay Dockerfile listo para construir imagen Node y publicar el build de SvelteKit.
+
+Healthcheck:
+- Endpoint de verificacion: /health
+
+## 11) Seguridad actual
+
+- Las claves ya no se guardan en texto plano: se hashean con scrypt.
+- Las sesiones se almacenan en base de datos y la cookie es httpOnly.
+- En produccion la cookie se marca secure automaticamente.
+- Todas las validaciones sensibles siguen ejecutandose del lado servidor.
+
+## 12) Criterios de aceptacion iniciales
 
 - Se pueden crear participantes con nombre.
 - Se pueden cargar pronosticos para todos los partidos.
@@ -211,7 +281,7 @@ Endpoints server (ejemplo):
 - Se visualiza ranking total ordenado por puntos.
 - Se identifica ganador del prode al terminar la final.
 
-## 10) Nota de alcance
+## 13) Nota de alcance
 
 Este README define la logica de negocio del prode y la estructura del torneo.
 Si FIFA ajusta cruces oficiales de ronda de 32, se actualiza esta seccion sin cambiar la base del sistema de puntuacion.

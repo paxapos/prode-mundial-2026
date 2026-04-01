@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Análisis Integral: Rumbo al Mundial 2026</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #F3F4F6; color: #1F2937; }
+        .chart-container { position: relative; width: 100%; max-width: 700px; margin-left: auto; margin-right: auto; height: 350px; max-height: 400px; }
+        @media (min-width: 768px) { .chart-container { height: 400px; } }
+        .stat-card { transition: transform 0.2s; }
+        .stat-card:hover { transform: translateY(-4px); }
+    </style>
+</head>
+<body class="antialiased pb-12">
+    <!-- Palette: Vibrant Sports (#4A148C, #FF1744, #00E676, #2979FF, #FFEA00) -->
+    <!-- CONFIRMATION: NEITHER Mermaid JS NOR SVG were used anywhere in the output. -->
+    <!-- PLAN: 1. Header/Intro -> 2. KPI Numbers -> 3. Age Analysis (Bar) -> 4. Qualification Performance (Scatter) -> 5. Historical Weight (Doughnut) -> 6. Tactical Radar (Radar) -> 7. Process Timeline (HTML/CSS Flow) -->
+    <!-- CHOICES: Age Analysis -> Compare -> Bar Chart (Chart.js, No SVG); Qualifiers -> Relationships -> Scatter Plot (Chart.js, No SVG); History -> Inform -> Doughnut Chart (Chart.js, No SVG); Tactics -> Compare -> Radar Chart (Chart.js, No SVG); Timeline -> Organize -> HTML/CSS Grid (No SVG). -->
+
+    <header class="bg-[#4A148C] text-white py-12 px-6 shadow-lg mb-10 border-b-8 border-[#FF1744]">
+        <div class="max-w-6xl mx-auto">
+            <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight mb-4">Rumbo al Mundial 2026</h1>
+            <p class="text-xl md:text-2xl font-light text-gray-200 max-w-3xl">Análisis detallado de las principales potencias globales: edad de las plantillas, rendimiento en eliminatorias, peso histórico y actualidad táctica.</p>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
+        
+        <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div class="stat-card bg-white rounded-xl shadow-md p-6 border-l-4 border-[#2979FF]">
+                <div class="text-sm font-bold text-gray-500 uppercase tracking-wide">Promedio Edad Global</div>
+                <div class="mt-2 text-4xl font-extrabold text-[#4A148C]">26.8 <span class="text-lg text-gray-400 font-medium">años</span></div>
+                <div class="mt-2 text-sm text-gray-600">Equilibrio ideal entre juventud y veteranía en la élite.</div>
+            </div>
+            <div class="stat-card bg-white rounded-xl shadow-md p-6 border-l-4 border-[#00E676]">
+                <div class="text-sm font-bold text-gray-500 uppercase tracking-wide">Mejor Clasificado</div>
+                <div class="mt-2 text-4xl font-extrabold text-[#4A148C]">Francia</div>
+                <div class="mt-2 text-sm text-gray-600">Dominio absoluto en su grupo eliminatorio.</div>
+            </div>
+            <div class="stat-card bg-white rounded-xl shadow-md p-6 border-l-4 border-[#FF1744]">
+                <div class="text-sm font-bold text-gray-500 uppercase tracking-wide">Mayor Goleador</div>
+                <div class="mt-2 text-4xl font-extrabold text-[#4A148C]">Inglaterra</div>
+                <div class="mt-2 text-sm text-gray-600">Promedio de 2.8 goles por partido oficial reciente.</div>
+            </div>
+            <div class="stat-card bg-white rounded-xl shadow-md p-6 border-l-4 border-[#FFEA00]">
+                <div class="text-sm font-bold text-gray-500 uppercase tracking-wide">Campeón Defensor</div>
+                <div class="mt-2 text-4xl font-extrabold text-[#4A148C]">Argentina</div>
+                <div class="mt-2 text-sm text-gray-600">Llega con la base del título de 2022 y nuevos talentos.</div>
+            </div>
+        </section>
+
+        <section class="bg-white rounded-xl shadow-lg p-6 md:p-10">
+            <div class="mb-6">
+                <h2 class="text-3xl font-bold text-gray-800 mb-2">Juventud vs Experiencia: La Edad de las Plantillas</h2>
+                <p class="text-gray-600 text-lg">La edad promedio de un equipo es un indicador crucial. Selecciones como España apuestan por una renovación radical con talentos sub-21, mientras que Argentina y Brasil mantienen un núcleo experimentado rodeado de jóvenes promesas. Analizamos la composición demográfica de los principales candidatos.</p>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-center">
+                <div class="lg:col-span-2">
+                    <div class="chart-container">
+                        <canvas id="ageChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-gray-50 p-6 rounded-lg border border-gray-100">
+                    <h3 class="text-xl font-bold text-[#4A148C] mb-4">Conclusiones Clave</h3>
+                    <ul class="space-y-3 text-gray-700">
+                        <li class="flex items-start"><span class="text-[#FF1744] mr-2 font-bold">&#10148;</span> <strong>España (25.1):</strong> Es la plantilla más joven, liderada por la nueva generación dorada.</li>
+                        <li class="flex items-start"><span class="text-[#FF1744] mr-2 font-bold">&#10148;</span> <strong>Argentina (28.4):</strong> El equipo más veterano, priorizando la experiencia de sus líderes históricos junto a una integración paulatina.</li>
+                        <li class="flex items-start"><span class="text-[#FF1744] mr-2 font-bold">&#10148;</span> <strong>Francia (26.5):</strong> Considerada la edad óptima de madurez futbolística, combinando pico de rendimiento físico y experiencia internacional.</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div class="bg-white rounded-xl shadow-lg p-6 md:p-8">
+                <h2 class="text-2xl font-bold text-gray-800 mb-3">Rendimiento en Clasificatorias</h2>
+                <p class="text-gray-600 mb-6">Relación entre la efectividad ofensiva (Goles a Favor) y la solidez defensiva (Goles en Contra) durante la última fase de clasificación o liga continental. El cuadrante inferior derecho es el ideal.</p>
+                <div class="chart-container">
+                    <canvas id="qualifierChart"></canvas>
+                </div>
+                <div class="mt-4 text-sm text-gray-500 italic text-center">Datos basados en promedios por partido en ciclos competitivos recientes.</div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-lg p-6 md:p-8">
+                <h2 class="text-2xl font-bold text-gray-800 mb-3">El Peso de la Historia</h2>
+                <p class="text-gray-600 mb-6">Distribución de campeonatos mundiales entre las potencias analizadas. La historia no juega, pero impone respeto en instancias decisivas.</p>
+                <div class="chart-container">
+                    <canvas id="historyChart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <section class="bg-[#2979FF] rounded-xl shadow-lg p-6 md:p-10 text-white">
+            <div class="text-center mb-10">
+                <h2 class="text-3xl font-bold mb-4">Fases de Preparación: El Ciclo Mundialista</h2>
+                <p class="text-blue-100 max-w-2xl mx-auto text-lg">El éxito en la máxima cita no es casualidad. Las selecciones siguen un riguroso proceso de 4 años estructurado en fases críticas de desarrollo y consolidación.</p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 relative">
+                <div class="hidden md:block absolute top-1/2 left-0 w-full h-1 bg-blue-400 transform -translate-y-1/2 z-0"></div>
+                
+                <div class="bg-white text-gray-800 rounded-lg p-6 relative z-10 shadow-xl border-t-4 border-[#FFEA00]">
+                    <div class="text-4xl mb-3 text-center">&#128269;</div>
+                    <h3 class="font-bold text-lg text-center mb-2">1. Exploración</h3>
+                    <p class="text-sm text-gray-600 text-center">Post-mundial anterior. Pruebas de nuevos jugadores, cambio generacional y definición de nueva identidad táctica.</p>
+                </div>
+                
+                <div class="bg-white text-gray-800 rounded-lg p-6 relative z-10 shadow-xl border-t-4 border-[#00E676]">
+                    <div class="text-4xl mb-3 text-center">&#9881;</div>
+                    <h3 class="font-bold text-lg text-center mb-2">2. Consolidación</h3>
+                    <p class="text-sm text-gray-600 text-center">Torneos continentales (Copa América, Eurocopa). Se define la columna vertebral del equipo titular.</p>
+                </div>
+                
+                <div class="bg-white text-gray-800 rounded-lg p-6 relative z-10 shadow-xl border-t-4 border-[#FF1744]">
+                    <div class="text-4xl mb-3 text-center">&#9876;</div>
+                    <h3 class="font-bold text-lg text-center mb-2">3. Clasificación</h3>
+                    <p class="text-sm text-gray-600 text-center">Competencia oficial bajo presión. Ajustes tácticos finos y manejo de grupos bajo estrés de resultados.</p>
+                </div>
+                
+                <div class="bg-white text-gray-800 rounded-lg p-6 relative z-10 shadow-xl border-t-4 border-[#4A148C]">
+                    <div class="text-4xl mb-3 text-center">&#128747;</div>
+                    <h3 class="font-bold text-lg text-center mb-2">4. Aislamiento</h3>
+                    <p class="text-sm text-gray-600 text-center">Campamento base previo al torneo. Enfoque 100% en físico, balón parado y cohesión del grupo final.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="bg-white rounded-xl shadow-lg p-6 md:p-10 mb-8">
+            <div class="mb-8">
+                <h2 class="text-3xl font-bold text-gray-800 mb-2">Radiografía Táctica y Atributos</h2>
+                <p class="text-gray-600 text-lg">Una evaluación comparativa del estilo de juego y fortalezas relativas. Calificación de 0 a 100 en cinco métricas fundamentales: Poder Ofensivo, Solidez Defensiva, Control del Mediocampo, Velocidad en Transiciones y Experiencia de Plantilla.</p>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                <div class="chart-container !max-w-md">
+                    <canvas id="radarChart"></canvas>
+                </div>
+                <div class="flex flex-col justify-center space-y-6">
+                    <div class="border-l-4 border-[#4A148C] pl-4">
+                        <h4 class="font-bold text-lg text-gray-800">Francia: Equilibrio Letal</h4>
+                        <p class="text-gray-600">Destaca por su velocidad en transiciones ofensivas y un mediocampo de contención férreo. Su poderío físico es su mayor baza táctica.</p>
+                    </div>
+                    <div class="border-l-4 border-[#2979FF] pl-4">
+                        <h4 class="font-bold text-lg text-gray-800">Argentina: Posesión y Experiencia</h4>
+                        <p class="text-gray-600">Lidera en control de mediocampo y experiencia. Su juego se basa en pausas, inteligencia espacial y alta efectividad en el último tercio.</p>
+                    </div>
+                    <div class="border-l-4 border-[#00E676] pl-4">
+                        <h4 class="font-bold text-lg text-gray-800">Inglaterra: Poder Ofensivo</h4>
+                        <p class="text-gray-600">Posee los índices más altos en creación de oportunidades y poder ofensivo bruto, aunque presenta ligera vulnerabilidad en transiciones defensivas rápidas.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="bg-gray-800 text-white text-center py-6">
+        <p class="text-sm text-gray-400">Datos analíticos proyectados para propósitos de demostración. © 2026 Análisis Deportivo Global.</p>
+    </footer>
+
+    <script>
+        function wrapLabel(label) {
+            if (label.length <= 16) return label;
+            const words = label.split(' ');
+            let lines = [];
+            let currentLine = '';
+            words.forEach(word => {
+                if ((currentLine + word).length > 16) {
+                    if (currentLine) lines.push(currentLine.trim());
+                    currentLine = word + ' ';
+                } else {
+                    currentLine += word + ' ';
+                }
+            });
+            if (currentLine) lines.push(currentLine.trim());
+            return lines;
+        }
+
+        const commonTooltipConfig = {
+            callbacks: {
+                title: function(tooltipItems) {
+                    const item = tooltipItems[0];
+                    let label = item.chart.data.labels[item.dataIndex];
+                    if (Array.isArray(label)) {
+                        return label.join(' ');
+                    } else {
+                        return label;
+                    }
+                }
+            }
+        };
+
+        const teams = [
+            'Selección Argentina de Fútbol', 
+            'Selección Nacional de Francia', 
+            'Selección de Fútbol de Brasil', 
+            'Selección de Inglaterra', 
+            'Selección Española de Fútbol', 
+            'Selección Nacional de Alemania'
+        ];
+        
+        const wrappedTeams = teams.map(wrapLabel);
+
+        const ageCtx = document.getElementById('ageChart').getContext('2d');
+        new Chart(ageCtx, {
+            type: 'bar',
+            data: {
+                labels: wrappedTeams,
+                datasets: [{
+                    label: 'Promedio de Edad (Años)',
+                    data: [28.4, 26.5, 27.1, 26.2, 25.1, 26.8],
+                    backgroundColor: ['#2979FF', '#4A148C', '#FFEA00', '#FF1744', '#FF1744', '#1F2937'],
+                    borderRadius: 6,
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: commonTooltipConfig
+                },
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        min: 22,
+                        max: 30,
+                        grid: { color: '#E5E7EB' }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { font: { size: 11 } }
+                    }
+                }
+            }
+        });
+
+        const qualCtx = document.getElementById('qualifierChart').getContext('2d');
+        new Chart(qualCtx, {
+            type: 'scatter',
+            data: {
+                datasets: [
+                    { label: 'Argentina', data: [{x: 0.4, y: 2.1}], backgroundColor: '#2979FF', pointRadius: 8, pointHoverRadius: 10 },
+                    { label: 'Francia', data: [{x: 0.6, y: 2.5}], backgroundColor: '#4A148C', pointRadius: 8, pointHoverRadius: 10 },
+                    { label: 'Brasil', data: [{x: 0.9, y: 1.8}], backgroundColor: '#FFEA00', pointRadius: 8, pointHoverRadius: 10 },
+                    { label: 'Inglaterra', data: [{x: 0.5, y: 2.8}], backgroundColor: '#FF1744', pointRadius: 8, pointHoverRadius: 10 },
+                    { label: 'España', data: [{x: 0.7, y: 2.4}], backgroundColor: '#FF9800', pointRadius: 8, pointHoverRadius: 10 },
+                    { label: 'Alemania', data: [{x: 1.1, y: 2.0}], backgroundColor: '#1F2937', pointRadius: 8, pointHoverRadius: 10 }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': Goles a favor ' + context.raw.y + ', Goles en contra ' + context.raw.x;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        title: { display: true, text: 'Goles en Contra por Partido (Menor es Mejor)', font: { weight: 'bold' } },
+                        reverse: true,
+                        grid: { color: '#E5E7EB' }
+                    },
+                    y: {
+                        title: { display: true, text: 'Goles a Favor por Partido (Mayor es Mejor)', font: { weight: 'bold' } },
+                        grid: { color: '#E5E7EB' }
+                    }
+                }
+            }
+        });
+
+        const histCtx = document.getElementById('historyChart').getContext('2d');
+        new Chart(histCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Brasil (5)', 'Alemania (4)', 'Argentina (3)', 'Francia (2)', 'Inglaterra (1)', 'España (1)'],
+                datasets: [{
+                    data: [5, 4, 3, 2, 1, 1],
+                    backgroundColor: ['#FFEA00', '#1F2937', '#2979FF', '#4A148C', '#FF1744', '#FF9800'],
+                    borderWidth: 2,
+                    borderColor: '#ffffff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '65%',
+                plugins: {
+                    legend: { position: 'right' },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return ' Títulos Mundiales: ' + context.raw;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        const radarLabels = ['Poder Ofensivo', 'Solidez Defensiva', 'Control Mediocampo', 'Transiciones', 'Experiencia'].map(wrapLabel);
+        const radarCtx = document.getElementById('radarChart').getContext('2d');
+        new Chart(radarCtx, {
+            type: 'radar',
+            data: {
+                labels: radarLabels,
+                datasets: [
+                    {
+                        label: 'Francia',
+                        data: [90, 85, 80, 95, 85],
+                        backgroundColor: 'rgba(74, 20, 140, 0.2)',
+                        borderColor: '#4A148C',
+                        pointBackgroundColor: '#4A148C',
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'Argentina',
+                        data: [85, 88, 92, 75, 95],
+                        backgroundColor: 'rgba(41, 121, 255, 0.2)',
+                        borderColor: '#2979FF',
+                        pointBackgroundColor: '#2979FF',
+                        borderWidth: 2
+                    },
+                    {
+                        label: 'Inglaterra',
+                        data: [95, 80, 85, 88, 80],
+                        backgroundColor: 'rgba(255, 23, 68, 0.2)',
+                        borderColor: '#FF1744',
+                        pointBackgroundColor: '#FF1744',
+                        borderWidth: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    tooltip: commonTooltipConfig
+                },
+                scales: {
+                    r: {
+                        angleLines: { color: 'rgba(0, 0, 0, 0.1)' },
+                        grid: { color: 'rgba(0, 0, 0, 0.1)' },
+                        pointLabels: { font: { size: 11, weight: 'bold' } },
+                        ticks: { display: false, min: 60, max: 100 }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

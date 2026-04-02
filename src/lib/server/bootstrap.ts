@@ -246,13 +246,43 @@ async function ensureColumns(tableName: string, specs: ColumnSpec[]): Promise<vo
 	}
 }
 
+async function migratePasswordHashNullable(): Promise<void> {
+	// Check if password_hash is NOT NULL — if so, recreate the table to make it nullable
+	const pragma = await client.execute('PRAGMA table_info(users);');
+	const pwCol = (pragma.rows as Array<Record<string, unknown>>).find(
+		(r) => r.name === 'password_hash'
+	);
+	if (!pwCol || Number(pwCol.notnull) === 0) return; // already nullable or doesn't exist
+
+	await client.executeMultiple(`
+		CREATE TABLE IF NOT EXISTS users_new (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			username TEXT NOT NULL,
+			nickname TEXT NOT NULL,
+			password_hash TEXT,
+			google_id TEXT,
+			avatar_url TEXT,
+			role TEXT NOT NULL DEFAULT 'player',
+			created_at TEXT NOT NULL
+		);
+		INSERT INTO users_new SELECT id, username, nickname, password_hash, google_id, avatar_url, role, created_at FROM users;
+		DROP TABLE users;
+		ALTER TABLE users_new RENAME TO users;
+		CREATE UNIQUE INDEX IF NOT EXISTS users_username_idx ON users(username);
+		CREATE UNIQUE INDEX IF NOT EXISTS users_nickname_idx ON users(nickname);
+		CREATE UNIQUE INDEX IF NOT EXISTS users_google_id_idx ON users (google_id) WHERE google_id IS NOT NULL;
+	`);
+}
+
 async function createTables(): Promise<void> {
 	await client.execute(`
 		CREATE TABLE IF NOT EXISTS users (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			username TEXT NOT NULL UNIQUE,
 			nickname TEXT NOT NULL UNIQUE,
-			password_hash TEXT NOT NULL,
+			password_hash TEXT,
+			google_id TEXT,
+			avatar_url TEXT,
 			role TEXT NOT NULL DEFAULT 'player',
 			created_at TEXT NOT NULL
 		);
@@ -358,6 +388,9 @@ async function normalizeSchema(): Promise<void> {
 		{ name: 'google_id', definition: 'google_id TEXT' },
 		{ name: 'avatar_url', definition: 'avatar_url TEXT' }
 	]);
+
+	// Migrate password_hash from NOT NULL to nullable (required for Google OAuth users)
+	await migratePasswordHashNullable();
 
 	// Ensure google_id unique index exists
 	await client.execute('CREATE UNIQUE INDEX IF NOT EXISTS users_google_id_idx ON users (google_id) WHERE google_id IS NOT NULL;');

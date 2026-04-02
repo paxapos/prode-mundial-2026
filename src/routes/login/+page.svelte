@@ -54,7 +54,7 @@
 
 			<div>
 				<Label for="nickname" class="mb-2">Nickname (solo para primer admin)</Label>
-				<Input id="nickname" name="nickname" minlength={3} maxlength={20} placeholder="apodo_tabla" />
+				<Input id="nickname" name="nickname" minlength={3} maxlength={20} placeholder="EJ: elcometrabas" />
 			</div>
 
 			<Button type="submit" class="w-full" color="green">Entrar</Button>

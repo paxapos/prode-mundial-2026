@@ -36,6 +36,11 @@ Este repositorio implementa un prode del Mundial 2026.
 - src/lib: componentes compartidos, utilidades, servicios.
 - src/lib/server: acceso a base de datos, repositorios y logica server.
 
+## Assets e imagenes
+
+- **Logo/icono de la app (copa):** `static/copacup.svg` y `src/lib/assets/favicon.svg` (copia). Es un SVG vectorial de la copa del mundo dorada con detalles verdes. Se usa como favicon, icono en la barra de navegación y en cualquier lugar donde se necesite representar la identidad de la app.
+- **Logo del Mundial 2026:** `static/mundial_2026.png`. Es el logo oficial del torneo FIFA World Cup 2026. Se usa en el hero de la pagina principal y en contextos promocionales o de branding del torneo.
+
 ## Convenciones para agentes
 
 - Antes de modificar logica de puntos, actualizar pruebas y documentacion.

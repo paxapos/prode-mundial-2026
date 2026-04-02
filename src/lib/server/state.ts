@@ -94,6 +94,7 @@ function toMatch(row: typeof tournamentMatches.$inferSelect): Match {
 		teamA: row.teamA,
 		teamB: row.teamB,
 		kickoffAt: row.kickoffAt,
+		venue: row.venue ?? null,
 		scoreA: row.scoreA,
 		scoreB: row.scoreB,
 		penaltyWinner: (row.penaltyWinner as SideWinner) ?? null,
@@ -571,6 +572,7 @@ export async function addMatch(input: {
 	teamA: string;
 	teamB: string;
 	kickoffAt: string;
+	venue?: string;
 	actorUserId?: string;
 }): Promise<Match> {
 	await ensureDatabaseReady();
@@ -585,6 +587,7 @@ export async function addMatch(input: {
 			teamA: input.teamA.trim(),
 			teamB: input.teamB.trim(),
 			kickoffAt: new Date(input.kickoffAt).toISOString(),
+			venue: input.venue || null,
 			scoreA: null,
 			scoreB: null,
 			penaltyWinner: null,

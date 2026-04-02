@@ -285,3 +285,17 @@ Healthcheck:
 
 Este README define la logica de negocio del prode y la estructura del torneo.
 Si FIFA ajusta cruces oficiales de ronda de 32, se actualiza esta seccion sin cambiar la base del sistema de puntuacion.
+
+## 14) Deploy rapido con servidor (Firebase/GCP)
+
+Para deploy server-side rapido en ecosistema Firebase, usar Cloud Run:
+
+```bash
+cp .env.cloudrun.example .env.cloudrun
+
+# editar .env.cloudrun con tus valores
+pnpm deploy:cloudrun
+```
+
+Guia completa:
+- docs/firebase-cloudrun-deploy.md

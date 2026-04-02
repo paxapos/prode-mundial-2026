@@ -36,6 +36,7 @@ export interface Match {
 	teamA: string;
 	teamB: string;
 	kickoffAt: string;
+	venue: string | null;
 	scoreA: number | null;
 	scoreB: number | null;
 	penaltyWinner: SideWinner;

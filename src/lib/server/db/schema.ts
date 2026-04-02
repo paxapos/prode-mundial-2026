@@ -97,6 +97,7 @@ export const tournamentMatches = sqliteTable(
 		teamA: text('team_a').notNull(),
 		teamB: text('team_b').notNull(),
 		kickoffAt: text('kickoff_at').notNull(),
+		venue: text('venue'),
 		scoreA: integer('score_a'),
 		scoreB: integer('score_b'),
 		penaltyWinner: text('penalty_winner', { enum: ['A', 'B'] }),

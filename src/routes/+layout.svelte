@@ -21,7 +21,10 @@
 <div class="mx-auto min-h-screen max-w-6xl px-4 pb-10 pt-6 md:px-6">
 	<header class="sticky top-3 z-20 mb-8 rounded-2xl border border-slate-200/70 bg-white/85 px-4 py-3 shadow-sm backdrop-blur md:px-6">
 		<div class="flex flex-wrap items-center gap-3">
-			<a href="/" class="text-lg font-black tracking-tight text-slate-900">PRODE 2026</a>
+			<a href="/" class="flex items-center gap-2 text-lg font-black tracking-tight text-slate-900">
+				<img src={favicon} alt="Copa" class="h-6 w-6" />
+				PRODE 2026
+			</a>
 			<a href="/" class="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100">Inicio</a>
 			{#if data.activeTournament}
 				<a href={`/${data.activeTournament.alias}`} class="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100">

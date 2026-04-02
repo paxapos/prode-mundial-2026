@@ -9,65 +9,65 @@ export interface TeamInfo {
 
 export const TEAMS: TeamInfo[] = [
 	// Grupo A
-	{ name: 'Estados Unidos', code: 'us', group: 'A' },
-	{ name: 'Croacia', code: 'hr', group: 'A' },
-	{ name: 'Nigeria', code: 'ng', group: 'A' },
-	{ name: 'Panamá', code: 'pa', group: 'A' },
+	{ name: 'México', code: 'mx', group: 'A' },
+	{ name: 'Sudáfrica', code: 'za', group: 'A' },
+	{ name: 'Corea del Sur', code: 'kr', group: 'A' },
+	{ name: 'Rep. Checa', code: 'cz', group: 'A' },
 	// Grupo B
-	{ name: 'México', code: 'mx', group: 'B' },
-	{ name: 'Dinamarca', code: 'dk', group: 'B' },
-	{ name: 'Ecuador', code: 'ec', group: 'B' },
-	{ name: 'Jamaica', code: 'jm', group: 'B' },
+	{ name: 'Canadá', code: 'ca', group: 'B' },
+	{ name: 'Bosnia y Herzegovina', code: 'ba', group: 'B' },
+	{ name: 'Catar', code: 'qa', group: 'B' },
+	{ name: 'Suiza', code: 'ch', group: 'B' },
 	// Grupo C
-	{ name: 'Canadá', code: 'ca', group: 'C' },
-	{ name: 'Uruguay', code: 'uy', group: 'C' },
-	{ name: 'Camerún', code: 'cm', group: 'C' },
-	{ name: 'Costa Rica', code: 'cr', group: 'C' },
+	{ name: 'Brasil', code: 'br', group: 'C' },
+	{ name: 'Marruecos', code: 'ma', group: 'C' },
+	{ name: 'Haití', code: 'ht', group: 'C' },
+	{ name: 'Escocia', code: 'gb-sct', group: 'C' },
 	// Grupo D
-	{ name: 'Argentina', code: 'ar', group: 'D' },
-	{ name: 'Japón', code: 'jp', group: 'D' },
-	{ name: 'Chile', code: 'cl', group: 'D' },
+	{ name: 'Estados Unidos', code: 'us', group: 'D' },
+	{ name: 'Paraguay', code: 'py', group: 'D' },
 	{ name: 'Australia', code: 'au', group: 'D' },
+	{ name: 'Turquía', code: 'tr', group: 'D' },
 	// Grupo E
-	{ name: 'Brasil', code: 'br', group: 'E' },
-	{ name: 'Corea del Sur', code: 'kr', group: 'E' },
-	{ name: 'Túnez', code: 'tn', group: 'E' },
-	{ name: 'Nueva Zelanda', code: 'nz', group: 'E' },
+	{ name: 'Alemania', code: 'de', group: 'E' },
+	{ name: 'Curazao', code: 'cw', group: 'E' },
+	{ name: 'Costa de Marfil', code: 'ci', group: 'E' },
+	{ name: 'Ecuador', code: 'ec', group: 'E' },
 	// Grupo F
-	{ name: 'Francia', code: 'fr', group: 'F' },
-	{ name: 'Suiza', code: 'ch', group: 'F' },
-	{ name: 'Egipto', code: 'eg', group: 'F' },
-	{ name: 'Honduras', code: 'hn', group: 'F' },
+	{ name: 'Países Bajos', code: 'nl', group: 'F' },
+	{ name: 'Japón', code: 'jp', group: 'F' },
+	{ name: 'Suecia', code: 'se', group: 'F' },
+	{ name: 'Túnez', code: 'tn', group: 'F' },
 	// Grupo G
-	{ name: 'Inglaterra', code: 'gb-eng', group: 'G' },
-	{ name: 'Senegal', code: 'sn', group: 'G' },
-	{ name: 'Serbia', code: 'rs', group: 'G' },
+	{ name: 'Bélgica', code: 'be', group: 'G' },
+	{ name: 'Egipto', code: 'eg', group: 'G' },
 	{ name: 'Irán', code: 'ir', group: 'G' },
+	{ name: 'Nueva Zelanda', code: 'nz', group: 'G' },
 	// Grupo H
 	{ name: 'España', code: 'es', group: 'H' },
-	{ name: 'Marruecos', code: 'ma', group: 'H' },
-	{ name: 'Ghana', code: 'gh', group: 'H' },
-	{ name: 'Uzbekistán', code: 'uz', group: 'H' },
+	{ name: 'Cabo Verde', code: 'cv', group: 'H' },
+	{ name: 'Arabia Saudita', code: 'sa', group: 'H' },
+	{ name: 'Uruguay', code: 'uy', group: 'H' },
 	// Grupo I
-	{ name: 'Alemania', code: 'de', group: 'I' },
-	{ name: 'Colombia', code: 'co', group: 'I' },
-	{ name: 'Arabia Saudita', code: 'sa', group: 'I' },
+	{ name: 'Francia', code: 'fr', group: 'I' },
+	{ name: 'Senegal', code: 'sn', group: 'I' },
 	{ name: 'Irak', code: 'iq', group: 'I' },
+	{ name: 'Noruega', code: 'no', group: 'I' },
 	// Grupo J
-	{ name: 'Portugal', code: 'pt', group: 'J' },
-	{ name: 'Polonia', code: 'pl', group: 'J' },
-	{ name: 'Paraguay', code: 'py', group: 'J' },
-	{ name: 'Catar', code: 'qa', group: 'J' },
+	{ name: 'Argentina', code: 'ar', group: 'J' },
+	{ name: 'Argelia', code: 'dz', group: 'J' },
+	{ name: 'Austria', code: 'at', group: 'J' },
+	{ name: 'Jordania', code: 'jo', group: 'J' },
 	// Grupo K
-	{ name: 'Bélgica', code: 'be', group: 'K' },
-	{ name: 'Italia', code: 'it', group: 'K' },
-	{ name: 'Suecia', code: 'se', group: 'K' },
-	{ name: 'Argelia', code: 'dz', group: 'K' },
+	{ name: 'Portugal', code: 'pt', group: 'K' },
+	{ name: 'RD Congo', code: 'cd', group: 'K' },
+	{ name: 'Uzbekistán', code: 'uz', group: 'K' },
+	{ name: 'Colombia', code: 'co', group: 'K' },
 	// Grupo L
-	{ name: 'Países Bajos', code: 'nl', group: 'L' },
-	{ name: 'Austria', code: 'at', group: 'L' },
-	{ name: 'Costa de Marfil', code: 'ci', group: 'L' },
-	{ name: 'Rep. Checa', code: 'cz', group: 'L' }
+	{ name: 'Inglaterra', code: 'gb-eng', group: 'L' },
+	{ name: 'Croacia', code: 'hr', group: 'L' },
+	{ name: 'Ghana', code: 'gh', group: 'L' },
+	{ name: 'Panamá', code: 'pa', group: 'L' }
 ];
 
 const FLAG_CODES: Record<string, string> = {};
@@ -75,42 +75,41 @@ for (const t of TEAMS) {
 	FLAG_CODES[t.name] = t.code;
 }
 
+const VALID_WIDTHS = [20, 40, 80, 160, 320] as const;
+
 export function getFlagUrl(teamName: string, width: number = 80): string {
 	const code = FLAG_CODES[teamName];
 	if (!code) return '';
-	return `https://flagcdn.com/w${width}/${code}.png`;
+	const w = VALID_WIDTHS.reduce((prev, cur) => (Math.abs(cur - width) < Math.abs(prev - width) ? cur : prev));
+	return `https://flagcdn.com/w${w}/${code}.png`;
 }
 
 export function getGroupTeams(group: string): TeamInfo[] {
 	return TEAMS.filter((t) => t.group === group);
 }
 
-/** Match pairings within a group: indices into the 4-team array per matchday */
-export const GROUP_PAIRINGS = [
-	[0, 1],
-	[2, 3], // MD1
-	[0, 2],
-	[3, 1], // MD2
-	[3, 0],
-	[1, 2] // MD3
-] as const;
+/** Venue/stadium data */
+export interface Venue {
+	city: string;
+	stadium: string;
+	capacity: number;
+}
 
-/** Knockout round placeholder labels */
-export const ROUND32_MATCHES: { teamA: string; teamB: string }[] = [
-	{ teamA: '1° Grupo A', teamB: 'Mejor 3°' },
-	{ teamA: '1° Grupo B', teamB: 'Mejor 3°' },
-	{ teamA: '1° Grupo C', teamB: 'Mejor 3°' },
-	{ teamA: '1° Grupo D', teamB: 'Mejor 3°' },
-	{ teamA: '1° Grupo E', teamB: 'Mejor 3°' },
-	{ teamA: '1° Grupo F', teamB: 'Mejor 3°' },
-	{ teamA: '1° Grupo G', teamB: 'Mejor 3°' },
-	{ teamA: '1° Grupo H', teamB: 'Mejor 3°' },
-	{ teamA: '1° Grupo I', teamB: '2° Grupo J' },
-	{ teamA: '1° Grupo J', teamB: '2° Grupo I' },
-	{ teamA: '1° Grupo K', teamB: '2° Grupo L' },
-	{ teamA: '1° Grupo L', teamB: '2° Grupo K' },
-	{ teamA: '2° Grupo A', teamB: '2° Grupo H' },
-	{ teamA: '2° Grupo B', teamB: '2° Grupo G' },
-	{ teamA: '2° Grupo C', teamB: '2° Grupo F' },
-	{ teamA: '2° Grupo D', teamB: '2° Grupo E' }
-];
+export const VENUES: Record<string, Venue> = {
+	'MetLife Stadium': { city: 'Nueva York/Nueva Jersey', stadium: 'MetLife Stadium', capacity: 87157 },
+	'SoFi Stadium': { city: 'Los Ángeles', stadium: 'SoFi Stadium', capacity: 70240 },
+	'AT&T Stadium': { city: 'Dallas', stadium: 'AT&T Stadium', capacity: 92967 },
+	'Hard Rock Stadium': { city: 'Miami', stadium: 'Hard Rock Stadium', capacity: 64767 },
+	'NRG Stadium': { city: 'Houston', stadium: 'NRG Stadium', capacity: 72220 },
+	'Mercedes-Benz Stadium': { city: 'Atlanta', stadium: 'Mercedes-Benz Stadium', capacity: 75000 },
+	'Lumen Field': { city: 'Seattle', stadium: 'Lumen Field', capacity: 68740 },
+	'Lincoln Financial Field': { city: 'Filadelfia', stadium: 'Lincoln Financial Field', capacity: 69796 },
+	'Arrowhead Stadium': { city: 'Kansas City', stadium: 'Arrowhead Stadium', capacity: 76416 },
+	'Gillette Stadium': { city: 'Boston/Foxborough', stadium: 'Gillette Stadium', capacity: 65878 },
+	'Bay Area Stadium': { city: 'San Francisco', stadium: 'Bay Area Stadium', capacity: 68500 },
+	'BC Place': { city: 'Vancouver', stadium: 'BC Place', capacity: 54500 },
+	'BMO Field': { city: 'Toronto', stadium: 'BMO Field', capacity: 45500 },
+	'Estadio Azteca': { city: 'Ciudad de México', stadium: 'Estadio Azteca', capacity: 87523 },
+	'Estadio BBVA': { city: 'Monterrey', stadium: 'Estadio BBVA', capacity: 53500 },
+	'Estadio Akron': { city: 'Guadalajara', stadium: 'Estadio Akron', capacity: 49850 }
+};

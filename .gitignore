@@ -22,7 +22,13 @@ Thumbs.db
 .env.*
 !.env.example
 !.env.test
+!.env.cloudrun.example
 
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+# Firebase
+.firebaserc
+firebase-debug.log
+firebase-debug.*.log

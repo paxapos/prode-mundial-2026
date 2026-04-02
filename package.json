@@ -5,15 +5,21 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
+		"bootstrap": "./scripts/setup.sh",
 		"build": "vite build",
 		"preview": "vite preview",
 		"start": "node build",
 		"deploy:cloudrun": "./scripts/deploy-cloudrun.sh",
+		"deploy:firebase": "./scripts/deploy-firebase.sh",
+		"setup:prod": "./scripts/setup-prod.sh",
+		"smoke:health": "node ./scripts/smoke-health.mjs",
+		"smoke:db": "node ./scripts/smoke-db.mjs",
 		"prepare": "svelte-kit sync || echo ''",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"db:generate": "drizzle-kit generate",
-		"db:push": "drizzle-kit push"
+		"db:push": "drizzle-kit push",
+		"db:push:auto": "drizzle-kit push --force"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-node": "^5.5.4",

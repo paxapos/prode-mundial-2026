@@ -68,6 +68,7 @@ function toUser(row: typeof users.$inferSelect): User {
 		email: row.username,
 		nickname: row.nickname,
 		role: row.role as UserRole,
+		avatarUrl: row.avatarUrl ?? null,
 		createdAt: row.createdAt
 	};
 }
@@ -171,6 +172,12 @@ export async function getUserById(userId: string | null | undefined): Promise<Us
 	return row ? toUser(row) : null;
 }
 
+export async function getUserByNickname(nickname: string): Promise<User | null> {
+	await ensureDatabaseReady();
+	const [row] = await db.select().from(users).where(eq(users.nickname, nickname)).limit(1);
+	return row ? toUser(row) : null;
+}
+
 export async function getUserCount(): Promise<number> {
 	await ensureDatabaseReady();
 	const rows = await db.select({ id: users.id }).from(users);
@@ -187,8 +194,70 @@ export async function authenticateUser(input: { email: string; password: string 
 	const email = assertEmail(input.email);
 	const password = assertPassword(input.password);
 	const [row] = await db.select().from(users).where(eq(users.username, email)).limit(1);
-	if (!row || !verifyPassword(password, row.passwordHash)) throw new Error('Usuario o clave invalidos.');
+	if (!row || !row.passwordHash || !verifyPassword(password, row.passwordHash)) throw new Error('Usuario o clave invalidos.');
 	return toUser(row);
+}
+
+export async function findOrCreateGoogleUser(input: { googleId: string; email: string; name: string; avatarUrl?: string }): Promise<User> {
+	await ensureDatabaseReady();
+
+	// Look up by googleId first
+	const [byGoogleId] = await db.select().from(users).where(eq(users.googleId, input.googleId)).limit(1);
+	if (byGoogleId) return toUser(byGoogleId);
+
+	// Look up by email (existing local user, link their Google account)
+	const [byEmail] = await db.select().from(users).where(eq(users.username, input.email.toLowerCase())).limit(1);
+	if (byEmail) {
+		const [updated] = await db
+			.update(users)
+			.set({ googleId: input.googleId, avatarUrl: input.avatarUrl ?? null })
+			.where(eq(users.id, byEmail.id))
+			.returning();
+		await createAuditLog({ userId: updated.id, action: 'google_account_linked', entityType: 'user', entityId: String(updated.id), payload: { googleId: input.googleId } });
+		return toUser(updated);
+	}
+
+	// New user via Google
+	const totalUsers = await getUserCount();
+	const role: UserRole = totalUsers === 0 ? 'admin' : 'player';
+	const baseNickname = input.name
+		.trim()
+		.toLowerCase()
+		.normalize('NFD')
+		.replace(/[\u0300-\u036f]/g, '')
+		.replace(/[^a-z0-9_]/g, '_')
+		.replace(/_+/g, '_')
+		.slice(0, 20) || 'player';
+
+	// Ensure unique nickname
+	let nickname = baseNickname;
+	let suffix = 1;
+	while (true) {
+		const [exists] = await db.select({ id: users.id }).from(users).where(eq(users.nickname, nickname)).limit(1);
+		if (!exists) break;
+		nickname = `${baseNickname.slice(0, 17)}_${suffix++}`;
+	}
+
+	const [created] = await db
+		.insert(users)
+		.values({
+			username: input.email.toLowerCase(),
+			nickname,
+			passwordHash: null,
+			googleId: input.googleId,
+			avatarUrl: input.avatarUrl ?? null,
+			role,
+			createdAt: new Date().toISOString()
+		})
+		.returning();
+
+	const activeTournament = await getActiveTournament();
+	if (activeTournament) {
+		await db.insert(userTournaments).values({ userId: created.id, tournamentId: activeTournament.id, createdAt: new Date().toISOString() });
+	}
+
+	await createAuditLog({ userId: created.id, action: 'user_created_google', entityType: 'user', entityId: String(created.id), payload: { email: input.email, role } });
+	return toUser(created);
 }
 
 export async function createUserByAdmin(input: { email: string; password: string; nickname?: string; role: UserRole }): Promise<User> {

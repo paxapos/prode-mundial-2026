@@ -4,6 +4,7 @@ import { tournaments, tournamentMatches, userTournaments, users } from '$lib/ser
 import { defaultScoringConfig, serializeScoringConfig } from '$lib/scoring-config';
 
 const TOURNAMENT_ID = 'default-worldcup-2026';
+const CURRENT_SCHEMA_VERSION = 1;
 
 interface MatchSeed {
 	id: string;
@@ -209,6 +210,41 @@ function getAllMatches(): MatchSeed[] {
 }
 
 let initPromise: Promise<void> | null = null;
+let initError: Error | null = null;
+
+type ColumnSpec = {
+	name: string;
+	definition: string;
+	backfillSql?: string;
+};
+
+function escapeSqlLiteral(value: string): string {
+	return value.replaceAll("'", "''");
+}
+
+async function getTableColumnNames(tableName: string): Promise<Set<string>> {
+	const result = await client.execute(`PRAGMA table_info(${tableName});`);
+	const names = new Set<string>();
+
+	for (const row of result.rows as Array<Record<string, unknown>>) {
+		const name = typeof row.name === 'string' ? row.name : null;
+		if (name) names.add(name);
+	}
+
+	return names;
+}
+
+async function ensureColumns(tableName: string, specs: ColumnSpec[]): Promise<void> {
+	const existing = await getTableColumnNames(tableName);
+
+	for (const spec of specs) {
+		if (existing.has(spec.name)) continue;
+		await client.execute(`ALTER TABLE ${tableName} ADD COLUMN ${spec.definition};`);
+		if (spec.backfillSql) {
+			await client.execute(spec.backfillSql);
+		}
+	}
+}
 
 async function createTables(): Promise<void> {
 	await client.execute(`
@@ -301,6 +337,83 @@ async function createTables(): Promise<void> {
 			FOREIGN KEY(match_id) REFERENCES tournament_matches(id) ON DELETE CASCADE
 		);
 	`);
+	await client.execute(`
+		CREATE TABLE IF NOT EXISTS schema_migrations (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			version INTEGER NOT NULL UNIQUE,
+			name TEXT NOT NULL,
+			applied_at TEXT NOT NULL
+		);
+	`);
+}
+
+async function normalizeSchema(): Promise<void> {
+	const scoringConfigDefault = serializeScoringConfig(defaultScoringConfig());
+	const escapedScoringConfigDefault = escapeSqlLiteral(scoringConfigDefault);
+
+	await ensureColumns('users', [
+		{ name: 'nickname', definition: "nickname TEXT NOT NULL DEFAULT ''" },
+		{ name: 'role', definition: "role TEXT NOT NULL DEFAULT 'player'" },
+		{ name: 'created_at', definition: "created_at TEXT NOT NULL DEFAULT ''" }
+	]);
+
+	await ensureColumns('tournaments', [
+		{ name: 'header_image_url', definition: "header_image_url TEXT NOT NULL DEFAULT ''" },
+		{ name: 'state', definition: "state TEXT NOT NULL DEFAULT 'open_predictions'" },
+		{ name: 'start_at', definition: "start_at TEXT NOT NULL DEFAULT ''" },
+		{ name: 'lock_reason', definition: 'lock_reason TEXT' },
+		{
+			name: 'scoring_config_json',
+			definition: "scoring_config_json TEXT NOT NULL DEFAULT '{}'",
+			backfillSql: `UPDATE tournaments SET scoring_config_json = '${escapedScoringConfigDefault}' WHERE scoring_config_json IS NULL OR scoring_config_json = '{}' OR scoring_config_json = '';`
+		},
+		{ name: 'created_at', definition: "created_at TEXT NOT NULL DEFAULT ''" }
+	]);
+
+	await ensureColumns('tournament_matches', [
+		{ name: 'tournament_id', definition: "tournament_id TEXT NOT NULL DEFAULT 'default-worldcup-2026'" },
+		{ name: 'venue', definition: 'venue TEXT' },
+		{ name: 'penalty_winner', definition: 'penalty_winner TEXT' },
+		{ name: 'is_closed', definition: 'is_closed INTEGER NOT NULL DEFAULT 0' }
+	]);
+
+	await ensureColumns('tournament_predictions', [
+		{ name: 'tournament_id', definition: "tournament_id TEXT NOT NULL DEFAULT 'default-worldcup-2026'" },
+		{ name: 'pred_penalty_winner', definition: 'pred_penalty_winner TEXT' }
+	]);
+
+	await client.execute('CREATE UNIQUE INDEX IF NOT EXISTS tournaments_alias_idx ON tournaments(alias);');
+	await client.execute('CREATE UNIQUE INDEX IF NOT EXISTS users_username_idx ON users(username);');
+	await client.execute('CREATE UNIQUE INDEX IF NOT EXISTS users_nickname_idx ON users(nickname);');
+}
+
+async function ensureSchemaVersion(): Promise<void> {
+	const result = await client.execute('SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1;');
+	const latest = Number((result.rows?.[0] as Record<string, unknown> | undefined)?.version ?? 0);
+
+	if (latest >= CURRENT_SCHEMA_VERSION) return;
+
+	for (let version = latest + 1; version <= CURRENT_SCHEMA_VERSION; version += 1) {
+		await client.execute({
+			sql: 'INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?);',
+			args: [version, `bootstrap-v${version}`, new Date().toISOString()]
+		});
+	}
+}
+
+export async function getAppliedSchemaVersion(): Promise<number | null> {
+	try {
+		const result = await client.execute('SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1;');
+		const value = (result.rows?.[0] as Record<string, unknown> | undefined)?.version;
+		const version = typeof value === 'number' ? value : Number(value ?? NaN);
+		return Number.isFinite(version) ? version : null;
+	} catch {
+		return null;
+	}
+}
+
+export function getCurrentSchemaVersion(): number {
+	return CURRENT_SCHEMA_VERSION;
 }
 
 async function seedDefaults(): Promise<void> {
@@ -348,8 +461,22 @@ export async function ensureDatabaseReady(): Promise<void> {
 	if (!initPromise) {
 		initPromise = (async () => {
 			await createTables();
+			await normalizeSchema();
+			await ensureSchemaVersion();
 			await seedDefaults();
+			initError = null;
 		})();
 	}
-	await initPromise;
+
+	try {
+		await initPromise;
+	} catch (err) {
+		initPromise = null;
+		initError = err instanceof Error ? err : new Error('No se pudo inicializar la base de datos.');
+		throw initError;
+	}
+}
+
+export function getDatabaseInitError(): Error | null {
+	return initError;
 }

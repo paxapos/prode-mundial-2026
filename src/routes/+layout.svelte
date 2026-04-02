@@ -16,6 +16,14 @@
 <svelte:head>
 	<link rel="icon" href={favicon} />
 	<title>Prode Mundial 2026</title>
+	<meta property="og:title" content="Prode Mundial 2026" />
+	<meta property="og:description" content="Armá tu prode del Mundial 2026 y competí con amigos." />
+	<meta property="og:image" content="/mundial_2026.png" />
+	<meta property="og:type" content="website" />
+	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:title" content="Prode Mundial 2026" />
+	<meta name="twitter:description" content="Armá tu prode del Mundial 2026 y competí con amigos." />
+	<meta name="twitter:image" content="/mundial_2026.png" />
 </svelte:head>
 
 <div class="mx-auto min-h-screen max-w-6xl px-4 pb-10 pt-6 md:px-6">
@@ -57,6 +65,12 @@
 	</header>
 
 	<main>
+		{#if !data.dbReady && data.dbInitMessage}
+			<div class="mb-5 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+				<strong>Inicializacion incompleta:</strong> {data.dbInitMessage}
+			</div>
+		{/if}
+
 		{@render children()}
 	</main>
 </div>

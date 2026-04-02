@@ -11,13 +11,16 @@ export const users = sqliteTable(
 		id: integer('id').primaryKey({ autoIncrement: true }),
 		username: text('username').notNull(),
 		nickname: text('nickname').notNull(),
-		passwordHash: text('password_hash').notNull(),
+		passwordHash: text('password_hash'),
+		googleId: text('google_id'),
+		avatarUrl: text('avatar_url'),
 		role: text('role', { enum: ['player', 'admin'] }).notNull().default('player'),
 		createdAt: text('created_at').notNull()
 	},
 	(table) => ({
 		usernameIdx: uniqueIndex('users_username_idx').on(table.username),
-		nicknameIdx: uniqueIndex('users_nickname_idx').on(table.nickname)
+		nicknameIdx: uniqueIndex('users_nickname_idx').on(table.nickname),
+		googleIdIdx: uniqueIndex('users_google_id_idx').on(table.googleId)
 	})
 );
 

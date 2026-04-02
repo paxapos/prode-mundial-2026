@@ -243,6 +243,16 @@ Endpoints server (ejemplo):
 
 ## 9) Puesta en marcha local
 
+Inicio rapido recomendado (primera corrida):
+
+```bash
+pnpm bootstrap
+```
+
+Este comando ejecuta instalacion, corre smoke test de health (que dispara auto-inicializacion), valida tablas/migraciones y chequea compilacion.
+
+Ademas, en runtime la app auto-inicializa la base local en el primer arranque y completa columnas faltantes si detecta un schema parcial.
+
 1. Instalar dependencias:
 
 ```bash
@@ -290,6 +300,7 @@ Contenedor:
 
 Healthcheck:
 - Endpoint de verificacion: /health
+- Incluye diagnostico de base: dbReady, schemaVersion y expectedSchemaVersion.
 
 ## 11) Seguridad actual
 
@@ -312,16 +323,35 @@ Healthcheck:
 Este README define la logica de negocio del prode y la estructura del torneo.
 Si FIFA ajusta cruces oficiales de ronda de 32, se actualiza esta seccion sin cambiar la base del sistema de puntuacion.
 
-## 14) Deploy rapido con servidor (Firebase/GCP)
+## 14) Deploy en produccion — Firebase Hosting + Cloud Run
 
-Para deploy server-side rapido en ecosistema Firebase, usar Cloud Run:
+El stack de produccion usa:
+- **Cloud Run** (Google): corre el servidor SvelteKit SSR
+- **Firebase Hosting**: dominio custom `mundial2026.club`, SSL automatico, CDN
+- **Google OAuth**: login con cuenta de Google
+
+### Deploy rapido
 
 ```bash
 cp .env.cloudrun.example .env.cloudrun
-
-# editar .env.cloudrun con tus valores
-pnpm deploy:cloudrun
+# editar .env.cloudrun con tus valores reales
+firebase login
+firebase use TU_PROJECT_ID
+pnpm deploy:firebase
 ```
 
-Guia completa:
-- docs/firebase-cloudrun-deploy.md
+### Variables de entorno requeridas
+
+| Variable | Descripcion |
+|---|---|
+| `GCP_PROJECT_ID` | ID del proyecto Firebase/GCP |
+| `TURSO_DATABASE_URL` | URL de Turso DB |
+| `TURSO_AUTH_TOKEN` | Token de Turso |
+| `ORIGIN` | URL publica (`https://mundial2026.club`) |
+| `GOOGLE_CLIENT_ID` | Client ID de Google OAuth |
+| `GOOGLE_CLIENT_SECRET` | Client Secret de Google OAuth |
+
+### Guias completas
+
+- [docs/firebase-deploy-guia-completa.md](docs/firebase-deploy-guia-completa.md) — Guia paso a paso de cero a produccion
+- [docs/firebase-cloudrun-deploy.md](docs/firebase-cloudrun-deploy.md) — Solo Cloud Run (sin Firebase Hosting)

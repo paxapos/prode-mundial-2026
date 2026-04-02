@@ -9,6 +9,14 @@
 
 <svelte:head>
 	<title>{data.tournament.name} | Tabla</title>
+	<meta property="og:title" content="{data.tournament.name} | Tabla de posiciones" />
+	<meta property="og:description" content="Mirá la tabla de posiciones del prode {data.tournament.name}." />
+	<meta property="og:image" content="/mundial_2026.png" />
+	<meta property="og:type" content="website" />
+	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:title" content="{data.tournament.name} | Tabla de posiciones" />
+	<meta name="twitter:description" content="Mirá la tabla de posiciones del prode {data.tournament.name}." />
+	<meta name="twitter:image" content="/mundial_2026.png" />
 </svelte:head>
 
 <section class="space-y-6">
@@ -47,7 +55,9 @@
 										<span class="text-sm font-semibold text-slate-400">{index + 1}</span>
 									{/if}
 								</TableBodyCell>
-								<TableBodyCell class="font-semibold">{row.nickname}</TableBodyCell>
+								<TableBodyCell class="font-semibold">
+									<a href="/{data.tournament.alias}/prode/{row.nickname}" class="text-blue-600 hover:underline">{row.nickname}</a>
+								</TableBodyCell>
 								<TableBodyCell>
 									<span class="inline-flex min-w-[2rem] items-center justify-center rounded-lg bg-emerald-100 px-2 py-0.5 text-sm font-black text-emerald-700">{row.totalPoints}</span>
 								</TableBodyCell>

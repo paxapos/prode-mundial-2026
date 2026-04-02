@@ -1,15 +1,18 @@
 <script lang="ts">
 	import { deserialize } from '$app/forms';
+	import { page } from '$app/stores';
 	import { Badge } from 'flowbite-svelte';
 	import { getFlagUrl, GROUPS, VENUES } from '$lib/teams';
 	import { calcStandings, buildBracket, type LivePred } from '$lib/bracket-engine';
 	import { STAGE_LABELS } from '$lib/scoring-config';
+	import type { Match, SideWinner } from '$lib/types';
 
 	let { data } = $props();
 
 	/* ─── State ─────────────────────────────────────────── */
 	let activeTab = $state<string>('groups');
 	let saveStatus: Record<string, 'idle' | 'saving' | 'saved' | 'error'> = $state({});
+	let shareMsg = $state('');
 
 	/* ─── Points summary ────────────────────────────────── */
 	const myTotalPoints = $derived(
@@ -27,7 +30,7 @@
 	// Predictions keyed by matchId
 	let preds: Record<string, LivePred> = $state(
 		Object.fromEntries(
-			data.predictions.map((p: { matchId: string; predA: number; predB: number; predPenaltyWinner: import('$lib/types').SideWinner }) => [
+			data.predictions.map((p: { matchId: string; predA: number; predB: number; predPenaltyWinner: SideWinner }) => [
 				p.matchId,
 				{ predA: p.predA, predB: p.predB, predPenaltyWinner: p.predPenaltyWinner }
 			])
@@ -35,7 +38,7 @@
 	);
 
 	/* ─── Derived ───────────────────────────────────────── */
-	const groupMatches = $derived(data.matches.filter((m) => m.stage === 'groups'));
+	const groupMatches = $derived(data.matches.filter((m: Match) => m.stage === 'groups'));
 	const standings = $derived(calcStandings(groupMatches, preds));
 	const bracket = $derived(buildBracket(data.matches, preds));
 
@@ -43,11 +46,11 @@
 		Object.values(preds).filter((p) => p.predA !== null && p.predB !== null).length
 	);
 	const totalMatches = $derived(data.matches.length);
-	const pct = $derived(Math.round((completedCount / totalMatches) * 100));
+	const pct = $derived(totalMatches > 0 ? Math.round((completedCount / totalMatches) * 100) : 0);
 
 	function stageCount(stage: string) {
-		const all = data.matches.filter((m) => m.stage === stage);
-		const done = all.filter((m) => {
+		const all = data.matches.filter((m: Match) => m.stage === stage);
+		const done = all.filter((m: Match) => {
 			const p = preds[m.id];
 			return p && p.predA !== null && p.predB !== null;
 		}).length;
@@ -105,6 +108,7 @@
 	}
 
 	function updateScore(matchId: string, field: 'predA' | 'predB', value: string) {
+		if (!data.canEdit) return;
 		const num = value === '' ? null : parseInt(value, 10);
 		if (num !== null && (isNaN(num) || num < 0)) return;
 		const current = preds[matchId] ?? { predA: null, predB: null, predPenaltyWinner: null };
@@ -112,6 +116,7 @@
 	}
 
 	function updatePenalty(matchId: string, value: string) {
+		if (!data.canEdit) return;
 		const current = preds[matchId] ?? { predA: null, predB: null, predPenaltyWinner: null };
 		preds[matchId] = {
 			...current,
@@ -121,6 +126,7 @@
 
 	/* ─── Auto-save ─────────────────────────────────────── */
 	async function autoSave(matchId: string) {
+		if (!data.canEdit) return;
 		const pred = preds[matchId];
 		if (!pred || pred.predA === null || pred.predB === null) return;
 
@@ -128,7 +134,6 @@
 
 		const fd = new FormData();
 		fd.set('matchId', matchId);
-		fd.set('tournamentId', data.selectedTournament?.id ?? '');
 		fd.set('predA', String(pred.predA));
 		fd.set('predB', String(pred.predB));
 		fd.set('predPenaltyWinner', pred.predPenaltyWinner ?? '');
@@ -147,6 +152,7 @@
 	}
 
 	function handleBlur(matchId: string) {
+		if (!data.canEdit) return;
 		const pred = preds[matchId];
 		if (pred && pred.predA !== null && pred.predB !== null) autoSave(matchId);
 	}
@@ -160,13 +166,39 @@
 	/* ─── Knockout match list for a given stage ─────────── */
 	function knockoutMatches(stage: string) {
 		return data.matches
-			.filter((m) => m.stage === stage)
-			.sort((a, b) => a.kickoffAt.localeCompare(b.kickoffAt));
+			.filter((m: Match) => m.stage === stage)
+			.sort((a: Match, b: Match) => a.kickoffAt.localeCompare(b.kickoffAt));
 	}
+
+	/* ─── Share ──────────────────────────────────────────── */
+	async function shareProde() {
+		const url = $page.url.href;
+		const text = `Mirá el prode de ${data.profileUser.nickname} en ${data.tournament.name}`;
+		if (navigator.share) {
+			try {
+				await navigator.share({ title: `Prode de ${data.profileUser.nickname}`, text, url });
+			} catch { /* user cancelled */ }
+		} else if (navigator.clipboard) {
+			await navigator.clipboard.writeText(url);
+			shareMsg = 'Link copiado!';
+			setTimeout(() => { shareMsg = ''; }, 2500);
+		}
+	}
+
+	const pageTitle = $derived(`Prode de ${data.profileUser.nickname} | ${data.tournament.name}`);
+	const pageDescription = $derived(`Mirá los pronósticos de ${data.profileUser.nickname} para el ${data.tournament.name}. Prode Mundial 2026.`);
 </script>
 
 <svelte:head>
-	<title>Mi Prode | Prode Mundial 2026</title>
+	<title>{pageTitle}</title>
+	<meta property="og:title" content={pageTitle} />
+	<meta property="og:description" content={pageDescription} />
+	<meta property="og:image" content="/mundial_2026.png" />
+	<meta property="og:type" content="website" />
+	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:title" content={pageTitle} />
+	<meta name="twitter:description" content={pageDescription} />
+	<meta name="twitter:image" content="/mundial_2026.png" />
 </svelte:head>
 
 <section class="space-y-6">
@@ -178,16 +210,23 @@
 		<div class="relative flex items-center gap-4">
 			<img src="/copacup.svg" alt="Copa" class="h-14 w-14 drop-shadow-lg" />
 			<div class="flex-1">
-				<h1 class="text-3xl font-black tracking-tight">Mi Prode</h1>
+				<h1 class="text-3xl font-black tracking-tight">
+					{#if data.isOwner}Mi Prode{:else}Prode de {data.profileUser.nickname}{/if}
+				</h1>
 				<p class="text-sm text-white/60">
-					{data.selectedTournament?.name ?? 'Sin torneo'} · Completá tus pronósticos
+					{data.tournament.name} · {completedCount}/{totalMatches} pronósticos
 				</p>
 			</div>
-			{#if data.settings}
-				<Badge color={data.settings.state === 'open_predictions' ? 'green' : 'yellow'}>
-					{data.settings.state === 'open_predictions' ? 'Abierto' : data.settings.state}
-				</Badge>
-			{/if}
+			<div class="flex items-center gap-2">
+				{#if !data.canEdit}
+					<Badge color="purple">Solo lectura</Badge>
+				{/if}
+				{#if data.settings}
+					<Badge color={data.settings.state === 'open_predictions' ? 'green' : 'yellow'}>
+						{data.settings.state === 'open_predictions' ? 'Abierto' : data.settings.state}
+					</Badge>
+				{/if}
+			</div>
 		</div>
 
 		<!-- Progress bar -->
@@ -204,17 +243,24 @@
 			</div>
 		</div>
 
-		<!-- Share link -->
-		{#if data.selectedTournament && data.user}
-			<div class="mt-4">
-				<a
-					href="/{data.selectedTournament.alias}/prode/{data.user.nickname}"
-					class="inline-flex items-center gap-2 rounded-lg bg-white/10 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition-colors hover:bg-white/20"
-				>
-					📤 Compartir mi prode
-				</a>
-			</div>
-		{/if}
+		<!-- Share button -->
+		<div class="mt-4 flex items-center gap-3">
+			<button
+				onclick={shareProde}
+				class="inline-flex items-center gap-2 rounded-lg bg-white/10 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition-colors hover:bg-white/20"
+			>
+				📤 Compartir prode
+			</button>
+			<a
+				href="/{data.tournament.alias}"
+				class="inline-flex items-center gap-2 rounded-lg bg-white/10 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition-colors hover:bg-white/20"
+			>
+				📊 Ver tabla
+			</a>
+			{#if shareMsg}
+				<span class="text-xs font-bold text-emerald-400">{shareMsg}</span>
+			{/if}
+		</div>
 	</div>
 
 	<!-- ═══ POINTS SUMMARY ═══ -->
@@ -228,7 +274,7 @@
 					{myTotalPoints}
 				</div>
 				<div>
-					<p class="text-sm font-bold text-slate-700">Mis puntos</p>
+					<p class="text-sm font-bold text-slate-700">{data.isOwner ? 'Mis puntos' : 'Puntos'}</p>
 					<p class="text-xs text-slate-500">Partidos con resultado: {data.matchDetails.length}</p>
 				</div>
 			</div>
@@ -286,13 +332,13 @@
 			{#each GROUPS as group}
 				{@const gc = GC[group] ?? GC.A}
 				{@const groupStandings = standings[group] ?? []}
-				{@const gMatches = groupMatches.filter((m) => m.groupCode === group)}
+				{@const gMatches = groupMatches.filter((m: Match) => m.groupCode === group)}
 				<div class="card-3d overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg">
 					<!-- Group header -->
 					<div class="{gc.bg} flex items-center justify-between px-5 py-3">
 						<h3 class="text-lg font-black text-white">Grupo {group}</h3>
 						<span class="rounded-full bg-white/20 px-2.5 py-0.5 text-[10px] font-bold text-white">
-							{stageCount('groups').done > 0 ? `${gMatches.filter((m) => preds[m.id]?.predA !== null && preds[m.id]?.predA !== undefined).length}/6` : '0/6'}
+							{stageCount('groups').done > 0 ? `${gMatches.filter((m: Match) => preds[m.id]?.predA !== null && preds[m.id]?.predA !== undefined).length}/6` : '0/6'}
 						</span>
 					</div>
 
@@ -350,12 +396,14 @@
 								<div class="mb-1.5 flex items-center justify-between text-[10px] text-slate-400">
 									<span>{formatDateShort(match.kickoffAt)} · {formatTime(match.kickoffAt)}</span>
 									<div class="flex items-center gap-1.5">
-										{#if status === 'saving'}
-											<span class="h-3 w-3 animate-spin rounded-full border-2 border-amber-400 border-t-transparent"></span>
-										{:else if status === 'saved'}
-											<span class="text-emerald-500">✓</span>
-										{:else if status === 'error'}
-											<span class="text-rose-500">✗</span>
+										{#if data.canEdit}
+											{#if status === 'saving'}
+												<span class="h-3 w-3 animate-spin rounded-full border-2 border-amber-400 border-t-transparent"></span>
+											{:else if status === 'saved'}
+												<span class="text-emerald-500">✓</span>
+											{:else if status === 'error'}
+												<span class="text-rose-500">✗</span>
+											{/if}
 										{/if}
 										<span>{venueCity(match.venue)}</span>
 									</div>
@@ -373,27 +421,39 @@
 
 									<!-- Scores -->
 									<div class="flex items-center gap-1">
-										<input
-											type="number"
-											min="0"
-											inputmode="numeric"
-											value={pred.predA ?? ''}
-											oninput={(e) => updateScore(match.id, 'predA', e.currentTarget.value)}
-											onblur={() => handleBlur(match.id)}
-											class="score-input h-9 w-10 rounded-lg border-2 border-slate-200 bg-slate-50 text-center text-sm font-black text-slate-800
-											focus:border-amber-400 focus:bg-white focus:ring-2 focus:ring-amber-400/30"
-										/>
+										{#if data.canEdit}
+											<input
+												type="number"
+												min="0"
+												inputmode="numeric"
+												value={pred.predA ?? ''}
+												oninput={(e) => updateScore(match.id, 'predA', e.currentTarget.value)}
+												onblur={() => handleBlur(match.id)}
+												class="score-input h-9 w-10 rounded-lg border-2 border-slate-200 bg-slate-50 text-center text-sm font-black text-slate-800
+												focus:border-amber-400 focus:bg-white focus:ring-2 focus:ring-amber-400/30"
+											/>
+										{:else}
+											<span class="flex h-9 w-10 items-center justify-center rounded-lg border-2 border-slate-200 bg-slate-50 text-sm font-black text-slate-800">
+												{pred.predA ?? '-'}
+											</span>
+										{/if}
 										<span class="text-xs font-bold text-slate-300">:</span>
-										<input
-											type="number"
-											min="0"
-											inputmode="numeric"
-											value={pred.predB ?? ''}
-											oninput={(e) => updateScore(match.id, 'predB', e.currentTarget.value)}
-											onblur={() => handleBlur(match.id)}
-											class="score-input h-9 w-10 rounded-lg border-2 border-slate-200 bg-slate-50 text-center text-sm font-black text-slate-800
-											focus:border-amber-400 focus:bg-white focus:ring-2 focus:ring-amber-400/30"
-										/>
+										{#if data.canEdit}
+											<input
+												type="number"
+												min="0"
+												inputmode="numeric"
+												value={pred.predB ?? ''}
+												oninput={(e) => updateScore(match.id, 'predB', e.currentTarget.value)}
+												onblur={() => handleBlur(match.id)}
+												class="score-input h-9 w-10 rounded-lg border-2 border-slate-200 bg-slate-50 text-center text-sm font-black text-slate-800
+												focus:border-amber-400 focus:bg-white focus:ring-2 focus:ring-amber-400/30"
+											/>
+										{:else}
+											<span class="flex h-9 w-10 items-center justify-center rounded-lg border-2 border-slate-200 bg-slate-50 text-sm font-black text-slate-800">
+												{pred.predB ?? '-'}
+											</span>
+										{/if}
 									</div>
 
 									<!-- Team B (left-aligned) -->
@@ -466,12 +526,14 @@
 								{/if}
 							</div>
 							<div class="flex items-center gap-1.5">
-								{#if status === 'saving'}
-									<span class="h-3 w-3 animate-spin rounded-full border-2 border-amber-400 border-t-transparent"></span>
-								{:else if status === 'saved'}
-									<span class="text-sm text-emerald-500">✓</span>
-								{:else if status === 'error'}
-									<span class="text-sm text-rose-500">✗</span>
+								{#if data.canEdit}
+									{#if status === 'saving'}
+										<span class="h-3 w-3 animate-spin rounded-full border-2 border-amber-400 border-t-transparent"></span>
+									{:else if status === 'saved'}
+										<span class="text-sm text-emerald-500">✓</span>
+									{:else if status === 'error'}
+										<span class="text-sm text-rose-500">✗</span>
+									{/if}
 								{/if}
 								<span class="text-[10px] text-slate-400">{venueCity(match.venue)}</span>
 							</div>
@@ -491,16 +553,22 @@
 										{/if}
 									</div>
 								</div>
-								<input
-									type="number"
-									min="0"
-									inputmode="numeric"
-									value={pred.predA ?? ''}
-									oninput={(e) => updateScore(match.id, 'predA', e.currentTarget.value)}
-									onblur={() => handleBlur(match.id)}
-									class="score-input h-10 w-12 rounded-lg border-2 border-slate-200 bg-white text-center text-base font-black
-									focus:border-amber-400 focus:ring-2 focus:ring-amber-400/30"
-								/>
+								{#if data.canEdit}
+									<input
+										type="number"
+										min="0"
+										inputmode="numeric"
+										value={pred.predA ?? ''}
+										oninput={(e) => updateScore(match.id, 'predA', e.currentTarget.value)}
+										onblur={() => handleBlur(match.id)}
+										class="score-input h-10 w-12 rounded-lg border-2 border-slate-200 bg-white text-center text-base font-black
+										focus:border-amber-400 focus:ring-2 focus:ring-amber-400/30"
+									/>
+								{:else}
+									<span class="flex h-10 w-12 items-center justify-center rounded-lg border-2 border-slate-200 bg-slate-50 text-base font-black text-slate-800">
+										{pred.predA ?? '-'}
+									</span>
+								{/if}
 							</div>
 
 							<!-- VS divider -->
@@ -523,44 +591,56 @@
 										{/if}
 									</div>
 								</div>
-								<input
-									type="number"
-									min="0"
-									inputmode="numeric"
-									value={pred.predB ?? ''}
-									oninput={(e) => updateScore(match.id, 'predB', e.currentTarget.value)}
-									onblur={() => handleBlur(match.id)}
-									class="score-input h-10 w-12 rounded-lg border-2 border-slate-200 bg-white text-center text-base font-black
-									focus:border-amber-400 focus:ring-2 focus:ring-amber-400/30"
-								/>
+								{#if data.canEdit}
+									<input
+										type="number"
+										min="0"
+										inputmode="numeric"
+										value={pred.predB ?? ''}
+										oninput={(e) => updateScore(match.id, 'predB', e.currentTarget.value)}
+										onblur={() => handleBlur(match.id)}
+										class="score-input h-10 w-12 rounded-lg border-2 border-slate-200 bg-white text-center text-base font-black
+										focus:border-amber-400 focus:ring-2 focus:ring-amber-400/30"
+									/>
+								{:else}
+									<span class="flex h-10 w-12 items-center justify-center rounded-lg border-2 border-slate-200 bg-slate-50 text-base font-black text-slate-800">
+										{pred.predB ?? '-'}
+									</span>
+								{/if}
 							</div>
 
-							<!-- Penalty selector (shows when draw) -->
+							<!-- Penalty selector (shows when draw in knockout) -->
 							{#if needsPenalty(match.id, stage)}
 								<div class="overflow-hidden rounded-xl border border-amber-200 bg-amber-50 p-3">
 									<p class="mb-2 text-xs font-bold text-amber-700">⚡ Empate — ¿Quién gana por penales?</p>
-									<div class="grid grid-cols-2 gap-2">
-										<button
-											onclick={() => { updatePenalty(match.id, 'A'); autoSave(match.id); }}
-											class="flex items-center justify-center gap-1.5 rounded-lg border-2 px-3 py-2 text-xs font-bold transition-all
-											{pred.predPenaltyWinner === 'A'
-												? 'border-emerald-400 bg-emerald-100 text-emerald-700 shadow-sm'
-												: 'border-slate-200 text-slate-600 hover:border-slate-300'}"
-										>
-											{#if getFlagUrl(teamA)}<img src={getFlagUrl(teamA, 24)} alt="" class="h-3 w-4 rounded-sm object-cover" />{/if}
-											{teamA}
-										</button>
-										<button
-											onclick={() => { updatePenalty(match.id, 'B'); autoSave(match.id); }}
-											class="flex items-center justify-center gap-1.5 rounded-lg border-2 px-3 py-2 text-xs font-bold transition-all
-											{pred.predPenaltyWinner === 'B'
-												? 'border-emerald-400 bg-emerald-100 text-emerald-700 shadow-sm'
-												: 'border-slate-200 text-slate-600 hover:border-slate-300'}"
-										>
-											{#if getFlagUrl(teamB)}<img src={getFlagUrl(teamB, 24)} alt="" class="h-3 w-4 rounded-sm object-cover" />{/if}
-											{teamB}
-										</button>
-									</div>
+									{#if data.canEdit}
+										<div class="grid grid-cols-2 gap-2">
+											<button
+												onclick={() => { updatePenalty(match.id, 'A'); autoSave(match.id); }}
+												class="flex items-center justify-center gap-1.5 rounded-lg border-2 px-3 py-2 text-xs font-bold transition-all
+												{pred.predPenaltyWinner === 'A'
+													? 'border-emerald-400 bg-emerald-100 text-emerald-700 shadow-sm'
+													: 'border-slate-200 text-slate-600 hover:border-slate-300'}"
+											>
+												{#if getFlagUrl(teamA)}<img src={getFlagUrl(teamA, 24)} alt="" class="h-3 w-4 rounded-sm object-cover" />{/if}
+												{teamA}
+											</button>
+											<button
+												onclick={() => { updatePenalty(match.id, 'B'); autoSave(match.id); }}
+												class="flex items-center justify-center gap-1.5 rounded-lg border-2 px-3 py-2 text-xs font-bold transition-all
+												{pred.predPenaltyWinner === 'B'
+													? 'border-emerald-400 bg-emerald-100 text-emerald-700 shadow-sm'
+													: 'border-slate-200 text-slate-600 hover:border-slate-300'}"
+											>
+												{#if getFlagUrl(teamB)}<img src={getFlagUrl(teamB, 24)} alt="" class="h-3 w-4 rounded-sm object-cover" />{/if}
+												{teamB}
+											</button>
+										</div>
+									{:else}
+										<p class="text-xs text-amber-800">
+											Penales: <span class="font-bold">{pred.predPenaltyWinner === 'A' ? teamA : pred.predPenaltyWinner === 'B' ? teamB : 'Sin definir'}</span>
+										</p>
+									{/if}
 								</div>
 							{/if}
 
@@ -591,7 +671,6 @@
 </section>
 
 <style>
-	/* 3D card tilt effect */
 	.card-3d {
 		transform-style: preserve-3d;
 		transition:
@@ -604,8 +683,6 @@
 			-6px 8px 25px rgb(0 0 0 / 0.1),
 			0 0 0 1px rgb(0 0 0 / 0.03);
 	}
-
-	/* Remove number input arrows for cleaner look */
 	.score-input::-webkit-outer-spin-button,
 	.score-input::-webkit-inner-spin-button {
 		-webkit-appearance: none;

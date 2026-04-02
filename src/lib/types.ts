@@ -11,6 +11,7 @@ export interface User {
 	email: string;
 	nickname: string;
 	role: UserRole;
+	avatarUrl: string | null;
 	createdAt: string;
 }
 

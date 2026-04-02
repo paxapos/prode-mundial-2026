@@ -67,20 +67,19 @@ export const actions: Actions = {
 
 		const data = await request.formData();
 		const tournamentId = String(data.get('tournamentId') ?? '');
-		const pointsOutcome = Number(data.get('pointsOutcome'));
-		const pointsExact = Number(data.get('pointsExact'));
-		const pointsBracket = Number(data.get('pointsBracket'));
+		const configJson = String(data.get('scoringConfigJson') ?? '');
 
-		if (!Number.isFinite(pointsOutcome) || !Number.isFinite(pointsExact) || !Number.isFinite(pointsBracket)) {
-			return fail(400, { message: 'Regla invalida.' });
+		let scoringConfig;
+		try {
+			scoringConfig = JSON.parse(configJson);
+		} catch {
+			return fail(400, { message: 'Configuración de puntuación inválida.' });
 		}
 
 		try {
 			await updateScoringRules({
 				tournamentId,
-				pointsOutcome,
-				pointsExact,
-				pointsBracket,
+				scoringConfig,
 				actorUserId: locals.user.id
 			});
 			return { ok: true };
@@ -119,9 +118,6 @@ export const actions: Actions = {
 		const alias = String(data.get('alias') ?? '');
 		const headerImageUrl = String(data.get('headerImageUrl') ?? '');
 		const startAt = String(data.get('startAt') ?? new Date().toISOString());
-		const pointsOutcome = Number(data.get('pointsOutcome'));
-		const pointsExact = Number(data.get('pointsExact'));
-		const pointsBracket = Number(data.get('pointsBracket'));
 
 		try {
 			await createTournament({
@@ -129,9 +125,6 @@ export const actions: Actions = {
 				alias,
 				headerImageUrl,
 				startAt,
-				pointsOutcome,
-				pointsExact,
-				pointsBracket,
 				actorUserId: locals.user.id
 			});
 			return { ok: true };

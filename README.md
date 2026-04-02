@@ -8,17 +8,43 @@ Objetivo del juego:
 - El juego recorre todo el torneo: fase de grupos, llaves eliminatorias y final.
 - Gana quien sume mas puntos.
 
-## 1) Reglas de puntuacion propuestas
+## 1) Reglas de puntuacion
 
-Sistema simple y claro para empezar (se puede ajustar luego):
+El sistema de puntuación es **100% configurable por torneo** desde el panel de administración. Cada torneo almacena su configuración completa en formato JSON.
 
-- 3 puntos: acierta el resultado exacto (goles de ambos equipos).
-- 1 punto: acierta solo el signo del partido (gana local, empate o gana visitante).
-- 0 puntos: no acierta ni marcador exacto ni signo.
+### Puntuación por fase
 
-Reglas opcionales para desempate:
+Cada fase del torneo tiene 4 parámetros configurables:
+
+| Concepto | Descripción |
+|---|---|
+| **Resultado (outcome)** | Acertar quién gana o si hay empate (1/X/2) |
+| **Resultado exacto (exact)** | Acertar el marcador exacto (goles de ambos equipos) |
+| **Equipo en llave (bracketTeam)** | Bonus por tener al equipo correcto en esa instancia de eliminación |
+| **Equipo lado incorrecto (bracketTeamWrongSide)** | Bonus reducido si el equipo está en la fase pero por otra llave |
+
+### Valores por defecto (basados en Qatar 2022 "Paxapoga")
+
+| Fase | Resultado | R. Exacto | Eq. en llave | Eq. lado incorrecto |
+|---|:---:|:---:|:---:|:---:|
+| Grupos | 1 | 1 | — | — |
+| 32avos | 1 | 1 | 2 | 1 |
+| Octavos | 1 | 1 | 3 | 1 |
+| Cuartos | 1 | 1 | 4 | 2 |
+| Semifinales | 1 | 1 | 5 | 2 |
+| Final | 1 | 1 | 6 | 3 |
+
+### Bonus por posición final
+
+| Posición | Puntos |
+|---|:---:|
+| 🥇 Campeón | 10 |
+| 🥈 Subcampeón | 6 |
+| 🥉 Tercero | 5 |
+
+### Desempate
 - Desempate 1: mayor cantidad de resultados exactos.
-- Desempate 2: mejor precision en semifinales y final.
+- Desempate 2: mayor cantidad de puntos de bracket.
 
 ## 2) Participantes
 
@@ -69,7 +95,7 @@ El torneo se divide en 12 grupos de 4 equipos.
 | **F** | 🇳🇱 Paises Bajos | 🇯🇵 Japon | 🇹🇳 Tunez | 🇵🇱 Polonia |
 | **G** | 🇧🇪 Belgica | 🇪🇬 Egipto | 🇮🇷 Iran | 🇳🇿 Nueva Zelanda |
 | **H** | 🇪🇸 Espana | 🇨🇻 Cabo Verde | 🇸🇦 Arabia Saudita | 🇺🇾 Uruguay |
-| **I** | 🇫🇷 Francia | 🇸🇳 Senegal | 🇳🇴 Noruega | 🇧🇴 Bolivia |
+| **I** | 🇫🇷 Francia | 🇸🇳 Senegal | 🇳🇴 Noruega | 🇮🇶 Irak |
 | **J** | 🇦🇷 Argentina | 🇩🇿 Argelia | 🇦🇹 Austria | 🇯🇴 Jordania |
 | **K** | 🇵🇹 Portugal | 🇨🇩 RD Congo | 🇺🇿 Uzbekistan | 🇨🇴 Colombia |
 | **L** | 🏴 Inglaterra | 🇭🇷 Croacia | 🇬🇭 Ghana | 🇵🇦 Panama |

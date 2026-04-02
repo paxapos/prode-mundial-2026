@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Badge } from 'flowbite-svelte';
 	import { getFlagUrl, VENUES } from '$lib/teams';
+	import type { Match } from '$lib/types';
 
 	let { data } = $props();
 
@@ -34,19 +35,21 @@
 		return groupColors[group] ?? { from: 'from-slate-600', to: 'to-slate-800', score: 'text-slate-800' };
 	}
 
-	function groupMatchesByGroup(matches: typeof data.groupMatches) {
-		const map: Record<string, typeof data.groupMatches> = {};
+	function groupMatchesByGroup(matches: Match[]) {
+		const map: Record<string, Match[]> = {};
 		for (const m of matches) {
 			const g = m.groupCode ?? '?';
-			(map[g] ??= []).push(m);
+			if (!map[g]) map[g] = [];
+			map[g].push(m);
 		}
 		return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
 	}
 
-	function groupBracketByStage(matches: typeof data.bracketMatches) {
-		const map: Record<string, typeof data.bracketMatches> = {};
+	function groupBracketByStage(matches: Match[]) {
+		const map: Record<string, Match[]> = {};
 		for (const m of matches) {
-			(map[m.stage] ??= []).push(m);
+			if (!map[m.stage]) map[m.stage] = [];
+			map[m.stage].push(m);
 		}
 		return stageOrder.filter((s) => map[s]).map((s) => [s, map[s]] as const);
 	}
@@ -86,6 +89,7 @@
 	{/if}
 
 	<!-- Leaderboard -->
+	{#if data.user}
 	<div>
 		<h2 class="mb-4 text-2xl font-black tracking-tight text-slate-900">Tabla de Posiciones</h2>
 		{#if data.leaderboard.length === 0}
@@ -101,8 +105,8 @@
 							<th class="w-14 py-3 text-center">#</th>
 							<th class="py-3 pl-4 text-left">Jugador</th>
 							<th class="w-20 py-3 text-center">Pts</th>
-							<th class="w-20 py-3 text-center">Exactos</th>
-							<th class="w-20 py-3 text-center">Signos</th>
+							<th class="w-20 py-3 text-center">R. Exactos</th>
+							<th class="w-20 py-3 text-center">Resultados</th>
 						</tr>
 					</thead>
 					<tbody class="divide-y divide-slate-50">
@@ -135,6 +139,13 @@
 			</div>
 		{/if}
 	</div>
+	{:else}
+		<div class="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
+			<img src="/copacup.svg" alt="Copa" class="mx-auto mb-3 h-12 w-12 opacity-40" />
+			<p class="text-sm text-slate-500">Iniciá sesión para ver la tabla de posiciones y cargar tus pronósticos.</p>
+			<a href="/login" class="mt-3 inline-block rounded-lg bg-blue-600 px-6 py-2 text-sm font-bold text-white hover:bg-blue-700">Ingresar</a>
+		</div>
+	{/if}
 
 	<!-- Groups: Standings + Matches -->
 	<div>

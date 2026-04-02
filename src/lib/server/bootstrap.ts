@@ -1,6 +1,7 @@
 import { client, db } from '$lib/server/db/client';
 import { count, and, eq } from 'drizzle-orm';
 import { tournaments, tournamentMatches, userTournaments, users } from '$lib/server/db/schema';
+import { defaultScoringConfig, serializeScoringConfig } from '$lib/scoring-config';
 
 const TOURNAMENT_ID = 'default-worldcup-2026';
 
@@ -251,9 +252,7 @@ async function createTables(): Promise<void> {
 			state TEXT NOT NULL DEFAULT 'open_predictions',
 			start_at TEXT NOT NULL,
 			lock_reason TEXT,
-			points_outcome INTEGER NOT NULL,
-			points_exact INTEGER NOT NULL,
-			points_bracket INTEGER NOT NULL,
+			scoring_config_json TEXT NOT NULL,
 			created_at TEXT NOT NULL
 		);
 	`);
@@ -315,9 +314,7 @@ async function seedDefaults(): Promise<void> {
 			state: 'open_predictions',
 			startAt: '2026-06-11T16:00:00.000Z',
 			lockReason: null,
-			pointsOutcome: 1,
-			pointsExact: 3,
-			pointsBracket: 3,
+			scoringConfigJson: serializeScoringConfig(defaultScoringConfig()),
 			createdAt: new Date().toISOString()
 		});
 	}

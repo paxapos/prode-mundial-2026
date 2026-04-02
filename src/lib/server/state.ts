@@ -4,7 +4,9 @@ import type {
 	GroupStandingRow,
 	LeaderboardEntry,
 	Match,
+	MatchPointDetail,
 	Prediction,
+	ScoringConfig,
 	ScoringRules,
 	SideWinner,
 	Tournament,
@@ -12,6 +14,7 @@ import type {
 	User,
 	UserRole
 } from '$lib/types';
+import { defaultScoringConfig, parseScoringConfig, serializeScoringConfig, getStageConfig } from '$lib/scoring-config';
 import { ensureDatabaseReady } from '$lib/server/bootstrap';
 import { db } from '$lib/server/db/client';
 import {
@@ -78,9 +81,7 @@ function toTournament(row: typeof tournaments.$inferSelect): Tournament {
 		state: row.state,
 		startAt: row.startAt,
 		lockReason: row.lockReason,
-		pointsOutcome: row.pointsOutcome,
-		pointsExact: row.pointsExact,
-		pointsBracket: row.pointsBracket,
+		scoringConfig: parseScoringConfig(row.scoringConfigJson),
 		createdAt: row.createdAt
 	};
 }
@@ -223,9 +224,7 @@ export async function createTournament(input: {
 	alias?: string;
 	headerImageUrl?: string;
 	startAt: string;
-	pointsOutcome: number;
-	pointsExact: number;
-	pointsBracket: number;
+	scoringConfig?: ScoringConfig;
 	actorUserId?: string;
 }): Promise<Tournament> {
 	await ensureDatabaseReady();
@@ -239,6 +238,8 @@ export async function createTournament(input: {
 	const [exists] = await db.select().from(tournaments).where(eq(tournaments.alias, alias)).limit(1);
 	if (exists) throw new Error('El alias ya existe.');
 
+	const scoringConfig = input.scoringConfig ?? defaultScoringConfig();
+
 	const [created] = await db
 		.insert(tournaments)
 		.values({
@@ -249,9 +250,7 @@ export async function createTournament(input: {
 			state: 'open_predictions',
 			startAt,
 			lockReason: null,
-			pointsOutcome: input.pointsOutcome,
-			pointsExact: input.pointsExact,
-			pointsBracket: input.pointsBracket,
+			scoringConfigJson: serializeScoringConfig(scoringConfig),
 			createdAt: new Date().toISOString()
 		})
 		.returning();
@@ -417,26 +416,19 @@ async function getTournamentById(tournamentId: string): Promise<Tournament | nul
 export async function getScoringRules(tournamentId: string): Promise<ScoringRules> {
 	const tournament = await getTournamentById(tournamentId);
 	if (!tournament) throw new Error('Torneo inexistente.');
-	return {
-		pointsOutcome: tournament.pointsOutcome,
-		pointsExact: tournament.pointsExact,
-		pointsBracket: tournament.pointsBracket
-	};
+	return tournament.scoringConfig;
 }
 
 export async function updateScoringRules(input: {
 	tournamentId: string;
-	pointsOutcome: number;
-	pointsExact: number;
-	pointsBracket: number;
+	scoringConfig: ScoringConfig;
 	actorUserId?: string;
 }): Promise<ScoringRules> {
 	await ensureDatabaseReady();
-	if (input.pointsOutcome < 0 || input.pointsExact < 0 || input.pointsBracket < 0) throw new Error('Los puntajes deben ser >= 0.');
 
 	const [updated] = await db
 		.update(tournaments)
-		.set({ pointsOutcome: input.pointsOutcome, pointsExact: input.pointsExact, pointsBracket: input.pointsBracket })
+		.set({ scoringConfigJson: serializeScoringConfig(input.scoringConfig) })
 		.where(eq(tournaments.id, input.tournamentId))
 		.returning();
 	if (!updated) throw new Error('Torneo inexistente.');
@@ -446,14 +438,10 @@ export async function updateScoringRules(input: {
 		action: 'scoring_rules_updated',
 		entityType: 'tournament',
 		entityId: input.tournamentId,
-		payload: { pointsOutcome: input.pointsOutcome, pointsExact: input.pointsExact, pointsBracket: input.pointsBracket }
+		payload: input.scoringConfig
 	});
 
-	return {
-		pointsOutcome: updated.pointsOutcome,
-		pointsExact: updated.pointsExact,
-		pointsBracket: updated.pointsBracket
-	};
+	return parseScoringConfig(updated.scoringConfigJson);
 }
 
 export async function getTournamentSettings(tournamentId: string): Promise<TournamentSettings> {
@@ -501,35 +489,38 @@ export async function getLeaderboard(tournamentId: string): Promise<LeaderboardE
 	const userIds = new Set(memberships.map((m) => String(m.userId)));
 	const usersInTournament = allUsers.filter((u) => userIds.has(u.id));
 	const matchMap = new Map(matchRows.map((row) => [row.id, toMatch(row)]));
+	const config = tournament.scoringConfig;
 
 	const board = usersInTournament.map((user) => {
 		let totalPoints = 0;
 		let exactHits = 0;
 		let outcomeHits = 0;
+		let bracketPoints = 0;
 		for (const row of predictionRows.filter((item) => String(item.userId) === user.id)) {
 			const prediction = toPrediction(row);
 			const match = matchMap.get(prediction.matchId);
 			if (!match || match.scoreA === null || match.scoreB === null) continue;
+
+			const stageConfig = getStageConfig(config, match.stage);
 			const predictedOutcome = getOutcome(prediction.predA, prediction.predB, match.stage, prediction.predPenaltyWinner);
 			const actualOutcome = getOutcome(match.scoreA, match.scoreB, match.stage, match.penaltyWinner);
 			const exact = prediction.predA === match.scoreA && prediction.predB === match.scoreB;
-			const isKnockout = match.stage !== 'groups';
-			const penaltyCorrect = match.penaltyWinner && prediction.predPenaltyWinner === match.penaltyWinner;
-			const bracketBonus = isKnockout ? (penaltyCorrect ? tournament.pointsBracket * 2 : tournament.pointsBracket) : 0;
 
 			if (exact) {
-				totalPoints += tournament.pointsExact;
-				if (isKnockout && predictedOutcome === actualOutcome) totalPoints += bracketBonus;
+				totalPoints += stageConfig.outcome + stageConfig.exact;
 				exactHits += 1;
-				continue;
-			}
-			if (predictedOutcome === actualOutcome) {
-				totalPoints += tournament.pointsOutcome;
-				if (isKnockout) totalPoints += bracketBonus;
+			} else if (predictedOutcome === actualOutcome) {
+				totalPoints += stageConfig.outcome;
 				outcomeHits += 1;
 			}
+
+			// Bracket bonus: points for correctly predicting the advancing team
+			if (match.stage !== 'groups' && predictedOutcome === actualOutcome) {
+				totalPoints += stageConfig.bracketTeam;
+				bracketPoints += stageConfig.bracketTeam;
+			}
 		}
-		return { userId: user.id, nickname: user.nickname, role: user.role, totalPoints, exactHits, outcomeHits };
+		return { userId: user.id, nickname: user.nickname, role: user.role, totalPoints, exactHits, outcomeHits, bracketPoints };
 	});
 
 	return board.sort((a, b) => {
@@ -537,6 +528,72 @@ export async function getLeaderboard(tournamentId: string): Promise<LeaderboardE
 		if (b.exactHits !== a.exactHits) return b.exactHits - a.exactHits;
 		return b.outcomeHits - a.outcomeHits;
 	});
+}
+
+/** Get per-match point breakdown for a specific user */
+export async function getPlayerMatchDetails(userId: string, tournamentId: string): Promise<MatchPointDetail[]> {
+	await ensureDatabaseReady();
+	const [tournament, predRows, matchRows] = await Promise.all([
+		getTournamentById(tournamentId),
+		db.select().from(tournamentPredictions).where(
+			and(eq(tournamentPredictions.userId, Number(userId)), eq(tournamentPredictions.tournamentId, tournamentId))
+		),
+		db.select().from(tournamentMatches).where(eq(tournamentMatches.tournamentId, tournamentId))
+	]);
+	if (!tournament) return [];
+	const config = tournament.scoringConfig;
+	const matchMap = new Map(matchRows.map((row) => [row.id, toMatch(row)]));
+	const details: MatchPointDetail[] = [];
+
+	for (const row of predRows) {
+		const pred = toPrediction(row);
+		const match = matchMap.get(pred.matchId);
+		if (!match || match.scoreA === null || match.scoreB === null) continue;
+
+		const stageConfig = getStageConfig(config, match.stage);
+		const predictedOutcome = getOutcome(pred.predA, pred.predB, match.stage, pred.predPenaltyWinner);
+		const actualOutcome = getOutcome(match.scoreA, match.scoreB, match.stage, match.penaltyWinner);
+		const exact = pred.predA === match.scoreA && pred.predB === match.scoreB;
+
+		let outcomePoints = 0;
+		let exactPoints = 0;
+		let bracketPts = 0;
+		let reason = '';
+
+		if (exact) {
+			outcomePoints = stageConfig.outcome;
+			exactPoints = stageConfig.exact;
+			reason = 'Resultado exacto';
+		} else if (predictedOutcome === actualOutcome) {
+			outcomePoints = stageConfig.outcome;
+			reason = 'Acierto de resultado';
+		} else {
+			reason = 'No acerto';
+		}
+
+		if (match.stage !== 'groups' && predictedOutcome === actualOutcome) {
+			bracketPts = stageConfig.bracketTeam;
+			reason += ` + equipo avanza (${bracketPts}pts)`;
+		}
+
+		details.push({
+			matchId: match.id,
+			stage: match.stage,
+			teamA: match.teamA,
+			teamB: match.teamB,
+			scoreA: match.scoreA,
+			scoreB: match.scoreB,
+			predA: pred.predA,
+			predB: pred.predB,
+			outcomePoints,
+			exactPoints,
+			bracketPoints: bracketPts,
+			totalPoints: outcomePoints + exactPoints + bracketPts,
+			reason
+		});
+	}
+
+	return details.sort((a, b) => b.totalPoints - a.totalPoints);
 }
 
 export async function updateMatchTeams(input: {

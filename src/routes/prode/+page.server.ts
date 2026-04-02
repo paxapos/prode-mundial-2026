@@ -3,6 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 import type { SideWinner } from '$lib/types';
 import {
 	getActiveTournament,
+	getPlayerMatchDetails,
 	getTournamentByAlias,
 	getTournamentSettings,
 	listMatches,
@@ -39,7 +40,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		selectedTournament: active,
 		matches: await listMatches(active.id),
 		predictions: await listPredictionsForUser(locals.user.id, active.id),
-		settings: await getTournamentSettings(active.id)
+		settings: await getTournamentSettings(active.id),
+		matchDetails: await getPlayerMatchDetails(locals.user.id, active.id)
 	};
 };
 

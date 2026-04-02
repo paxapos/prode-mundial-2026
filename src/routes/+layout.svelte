@@ -50,7 +50,7 @@
 						<Button size="xs" color="light">Salir ({data.user.nickname})</Button>
 					</form>
 				{:else}
-					<Button size="xs" href="/login">Ingresar</Button>
+					<Button size="xs" color="blue" href="/login">Ingresar</Button>
 				{/if}
 			</div>
 		</div>

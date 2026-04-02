@@ -62,9 +62,7 @@ export const tournaments = sqliteTable(
 			.default('open_predictions'),
 		startAt: text('start_at').notNull(),
 		lockReason: text('lock_reason'),
-		pointsOutcome: integer('points_outcome').notNull(),
-		pointsExact: integer('points_exact').notNull(),
-		pointsBracket: integer('points_bracket').notNull(),
+		scoringConfigJson: text('scoring_config_json').notNull(),
 		createdAt: text('created_at').notNull()
 	},
 	(table) => ({

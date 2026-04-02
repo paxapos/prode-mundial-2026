@@ -3,12 +3,26 @@
 	import { Badge } from 'flowbite-svelte';
 	import { getFlagUrl, GROUPS, VENUES } from '$lib/teams';
 	import { calcStandings, buildBracket, type LivePred } from '$lib/bracket-engine';
+	import { STAGE_LABELS } from '$lib/scoring-config';
 
 	let { data } = $props();
 
 	/* ─── State ─────────────────────────────────────────── */
 	let activeTab = $state<string>('groups');
 	let saveStatus: Record<string, 'idle' | 'saving' | 'saved' | 'error'> = $state({});
+
+	/* ─── Points summary ────────────────────────────────── */
+	const myTotalPoints = $derived(
+		(data.matchDetails ?? []).reduce((sum: number, d: { totalPoints: number }) => sum + d.totalPoints, 0)
+	);
+	const matchPointsMap = $derived<Record<string, { outcomePoints: number; exactPoints: number; bracketPoints: number; totalPoints: number; reason: string }>>(
+		Object.fromEntries(
+			(data.matchDetails ?? []).map((d: { matchId: string; outcomePoints: number; exactPoints: number; bracketPoints: number; totalPoints: number; reason: string }) => [
+				d.matchId,
+				{ outcomePoints: d.outcomePoints, exactPoints: d.exactPoints, bracketPoints: d.bracketPoints, totalPoints: d.totalPoints, reason: d.reason }
+			])
+		)
+	);
 
 	// Predictions keyed by matchId
 	let preds: Record<string, LivePred> = $state(
@@ -191,6 +205,44 @@
 		</div>
 	</div>
 
+	<!-- ═══ POINTS SUMMARY ═══ -->
+	{#if data.matchDetails && data.matchDetails.length > 0}
+		{@const outcomeTotal = data.matchDetails.reduce((s: number, d: { outcomePoints: number }) => s + d.outcomePoints, 0)}
+		{@const exactTotal = data.matchDetails.reduce((s: number, d: { exactPoints: number }) => s + d.exactPoints, 0)}
+		{@const bracketTotal = data.matchDetails.reduce((s: number, d: { bracketPoints: number }) => s + d.bracketPoints, 0)}
+		<div class="flex flex-wrap items-center gap-4 rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-sky-50 p-4 shadow-sm">
+			<div class="flex items-center gap-3">
+				<div class="flex h-14 w-14 items-center justify-center rounded-xl bg-emerald-500 text-2xl font-black text-white shadow-md">
+					{myTotalPoints}
+				</div>
+				<div>
+					<p class="text-sm font-bold text-slate-700">Mis puntos</p>
+					<p class="text-xs text-slate-500">Partidos con resultado: {data.matchDetails.length}</p>
+				</div>
+			</div>
+			<div class="flex flex-1 flex-wrap justify-end gap-3 text-xs">
+				{#if outcomeTotal > 0}
+					<div class="rounded-lg bg-white/80 px-3 py-1.5 shadow-sm">
+						<span class="font-bold text-blue-600">{outcomeTotal}</span>
+						<span class="text-slate-500"> resultado</span>
+					</div>
+				{/if}
+				{#if exactTotal > 0}
+					<div class="rounded-lg bg-white/80 px-3 py-1.5 shadow-sm">
+						<span class="font-bold text-emerald-600">{exactTotal}</span>
+						<span class="text-slate-500"> r. exactos</span>
+					</div>
+				{/if}
+				{#if bracketTotal > 0}
+					<div class="rounded-lg bg-white/80 px-3 py-1.5 shadow-sm">
+						<span class="font-bold text-violet-600">{bracketTotal}</span>
+						<span class="text-slate-500"> bracket</span>
+					</div>
+				{/if}
+			</div>
+		</div>
+	{/if}
+
 	<!-- ═══ TAB BAR ═══ -->
 	<div class="sticky top-[4.5rem] z-10 -mx-1 overflow-x-auto rounded-xl border border-slate-200/80 bg-white/90 px-1 py-1.5 shadow-sm backdrop-blur">
 		<div class="flex gap-1">
@@ -341,11 +393,20 @@
 									</div>
 								</div>
 
-								<!-- Real result -->
+								<!-- Real result + Points -->
 								{#if match.scoreA !== null && match.scoreB !== null}
-									<p class="mt-1 text-center text-[10px] text-slate-400">
-										Real: <span class="font-bold text-slate-600">{match.scoreA} - {match.scoreB}</span>
-									</p>
+									<div class="mt-1 flex items-center justify-center gap-2 text-[10px]">
+										<span class="text-slate-400">
+											Real: <span class="font-bold text-slate-600">{match.scoreA} - {match.scoreB}</span>
+										</span>
+										{#if matchPointsMap[match.id]}
+											{@const mp = matchPointsMap[match.id]}
+											<span class="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-bold
+												{mp.totalPoints > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'}">
+												{mp.totalPoints > 0 ? `+${mp.totalPoints}` : '0'} pts
+											</span>
+										{/if}
+									</div>
 								{/if}
 							</div>
 						{/each}
@@ -491,14 +552,23 @@
 								</div>
 							{/if}
 
-							<!-- Real result -->
+							<!-- Real result + Points -->
 							{#if match.scoreA !== null && match.scoreB !== null}
-								<p class="text-center text-[10px] text-slate-400">
-									Real: <span class="font-bold text-slate-600">{match.scoreA} - {match.scoreB}</span>
-									{#if match.penaltyWinner}
-										<span class="text-amber-600"> (Pen: {match.penaltyWinner === 'A' ? teamA : teamB})</span>
+								<div class="flex items-center justify-center gap-2 text-[10px]">
+									<span class="text-slate-400">
+										Real: <span class="font-bold text-slate-600">{match.scoreA} - {match.scoreB}</span>
+										{#if match.penaltyWinner}
+											<span class="text-amber-600"> (Pen: {match.penaltyWinner === 'A' ? teamA : teamB})</span>
+										{/if}
+									</span>
+									{#if matchPointsMap[match.id]}
+										{@const mp = matchPointsMap[match.id]}
+										<span class="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-bold
+											{mp.totalPoints > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'}">
+											{mp.totalPoints > 0 ? `+${mp.totalPoints}` : '0'} pts
+										</span>
 									{/if}
-								</p>
+								</div>
 							{/if}
 						</div>
 					</div>

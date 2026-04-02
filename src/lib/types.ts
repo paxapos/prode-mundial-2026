@@ -14,6 +14,28 @@ export interface User {
 	createdAt: string;
 }
 
+/** Per-stage scoring configuration for a tournament */
+export interface StageScoringConfig {
+	/** Points for correct outcome (win/draw/loss) */
+	outcome: number;
+	/** Bonus points for exact score (on top of outcome) */
+	exact: number;
+	/** Points for each correct team predicted in this bracket round */
+	bracketTeam: number;
+	/** Points for correct team on wrong side of bracket (usually floor(bracketTeam/2)) */
+	bracketTeamWrongSide: number;
+}
+
+export interface ScoringConfig {
+	stages: Record<MatchStage, StageScoringConfig>;
+	/** Bonus for predicting the champion */
+	bonusChampion: number;
+	/** Bonus for predicting the runner-up */
+	bonusRunnerUp: number;
+	/** Bonus for predicting third place */
+	bonusThird: number;
+}
+
 export interface Tournament {
 	id: string;
 	alias: string;
@@ -22,9 +44,7 @@ export interface Tournament {
 	state: TournamentState;
 	startAt: string;
 	lockReason: string | null;
-	pointsOutcome: number;
-	pointsExact: number;
-	pointsBracket: number;
+	scoringConfig: ScoringConfig;
 	createdAt: string;
 }
 
@@ -55,10 +75,23 @@ export interface Prediction {
 	updatedAt: string;
 }
 
-export interface ScoringRules {
-	pointsOutcome: number;
-	pointsExact: number;
-	pointsBracket: number;
+export interface ScoringRules extends ScoringConfig {}
+
+/** Detail of how many points a single match awarded */
+export interface MatchPointDetail {
+	matchId: string;
+	stage: MatchStage;
+	teamA: string;
+	teamB: string;
+	scoreA: number;
+	scoreB: number;
+	predA: number;
+	predB: number;
+	outcomePoints: number;
+	exactPoints: number;
+	bracketPoints: number;
+	totalPoints: number;
+	reason: string;
 }
 
 export interface TournamentSettings {
@@ -86,4 +119,5 @@ export interface LeaderboardEntry {
 	totalPoints: number;
 	exactHits: number;
 	outcomeHits: number;
+	bracketPoints: number;
 }

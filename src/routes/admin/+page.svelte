@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { Alert, Badge, Button, Input, Label, Select } from 'flowbite-svelte';
 	import { getFlagUrl, VENUES } from '$lib/teams';
+	import { STAGE_LABELS, defaultScoringConfig } from '$lib/scoring-config';
+	import type { MatchStage, ScoringConfig } from '$lib/types';
 
 	let { data, form } = $props();
 
@@ -12,6 +14,12 @@
 		semifinal: 'Semifinal',
 		final: 'Final'
 	};
+
+	/* ─── Scoring config state ─── */
+	let scoringConfig: ScoringConfig = $state(
+		data.rules ? structuredClone(data.rules) : defaultScoringConfig()
+	);
+	const STAGES: MatchStage[] = ['groups', 'round32', 'round16', 'quarterfinal', 'semifinal', 'final'];
 
 	/* ─── Tabs ─── */
 	type AdminTab = 'torneos' | 'usuarios' | 'resultados' | 'config';
@@ -411,19 +419,9 @@
 					</div>
 				</div>
 				<div class="grid grid-cols-3 gap-3">
-					<div>
-						<span class="mb-1 block text-xs font-bold text-slate-500">Pts. Signo</span>
-						<input type="number" min="0" name="pointsOutcome" value="1" required class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-center text-sm font-bold focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20" />
-					</div>
-					<div>
-						<span class="mb-1 block text-xs font-bold text-slate-500">Pts. Exacto</span>
-						<input type="number" min="0" name="pointsExact" value="3" required class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-center text-sm font-bold focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20" />
-					</div>
-					<div>
-						<span class="mb-1 block text-xs font-bold text-slate-500">Pts. Llave</span>
-						<input type="number" min="0" name="pointsBracket" value="3" required class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-center text-sm font-bold focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20" />
-					</div>
+					<!-- Points info note -->
 				</div>
+				<p class="text-xs text-slate-400">La puntuación se configura después de crear el torneo, desde la pestaña Config.</p>
 				<button type="submit" class="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 md:w-auto md:px-8">
 					🏆 Crear torneo
 				</button>
@@ -582,32 +580,107 @@
 	<!-- TAB: CONFIG                                        -->
 	<!-- ═══════════════════════════════════════════════════ -->
 	{#if activeTab === 'config'}
-		<div class="grid gap-6 lg:grid-cols-2">
-			<!-- Scoring rules -->
+		<div class="space-y-6">
+			<!-- Scoring rules per stage -->
 			<div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-				<h2 class="mb-1 text-lg font-black text-slate-800">Reglas de puntuación</h2>
+				<h2 class="mb-1 text-lg font-black text-slate-800">Reglas de puntuación por fase</h2>
 				<p class="mb-4 text-xs text-slate-400">Torneo: {data.selectedTournament?.name ?? '—'}</p>
-				<form method="POST" action="?/updateRules" class="space-y-4">
-					<input type="hidden" name="tournamentId" value={data.selectedTournament?.id} />
+
+				<div class="overflow-x-auto">
+					<table class="w-full text-sm">
+						<thead>
+							<tr class="border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-400">
+								<th class="py-2 text-left">Fase</th>
+								<th class="py-2 text-center">Resultado</th>
+								<th class="py-2 text-center">R. Exacto</th>
+								<th class="py-2 text-center">Equipo en llave</th>
+								<th class="py-2 text-center">Eq. lado incorrecto</th>
+							</tr>
+						</thead>
+						<tbody class="divide-y divide-slate-100">
+							{#each STAGES as stage}
+								<tr class="hover:bg-slate-50/50">
+									<td class="py-2 text-xs font-bold text-slate-700">{STAGE_LABELS[stage]}</td>
+									<td class="py-2 text-center">
+										<input
+											type="number"
+											min="0"
+											bind:value={scoringConfig.stages[stage].outcome}
+											class="w-14 rounded border border-slate-200 bg-slate-50 px-1 py-1 text-center text-sm font-bold focus:border-sky-400"
+										/>
+									</td>
+									<td class="py-2 text-center">
+										<input
+											type="number"
+											min="0"
+											bind:value={scoringConfig.stages[stage].exact}
+											class="w-14 rounded border border-slate-200 bg-slate-50 px-1 py-1 text-center text-sm font-bold focus:border-sky-400"
+										/>
+									</td>
+									<td class="py-2 text-center">
+										<input
+											type="number"
+											min="0"
+											bind:value={scoringConfig.stages[stage].bracketTeam}
+											class="w-14 rounded border border-slate-200 bg-slate-50 px-1 py-1 text-center text-sm font-bold focus:border-sky-400"
+											disabled={stage === 'groups'}
+										/>
+									</td>
+									<td class="py-2 text-center">
+										<input
+											type="number"
+											min="0"
+											bind:value={scoringConfig.stages[stage].bracketTeamWrongSide}
+											class="w-14 rounded border border-slate-200 bg-slate-50 px-1 py-1 text-center text-sm font-bold focus:border-sky-400"
+											disabled={stage === 'groups'}
+										/>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+
+				<!-- Bonus points -->
+				<div class="mt-6 border-t border-slate-200 pt-4">
+					<h3 class="mb-3 text-sm font-bold text-slate-700">Bonus por posición final</h3>
 					<div class="grid grid-cols-3 gap-3">
-						<div class="rounded-lg border border-slate-100 bg-slate-50 p-3 text-center">
-							<span class="mb-2 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Signo</span>
-							<input type="number" min="0" name="pointsOutcome" value={data.rules?.pointsOutcome ?? 1} required class="w-full rounded-lg border-2 border-slate-200 bg-white px-2 py-2 text-center text-xl font-black text-slate-800 focus:border-sky-400" />
-							<p class="mt-1 text-[9px] text-slate-400">Acertar 1/X/2</p>
+						<div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-center">
+							<span class="mb-1 block text-[10px] font-bold uppercase text-amber-600">🥇 Campeón</span>
+							<input
+								type="number"
+								min="0"
+								bind:value={scoringConfig.bonusChampion}
+								class="w-full rounded border border-amber-200 bg-white px-2 py-1.5 text-center text-lg font-black text-amber-700 focus:border-amber-400"
+							/>
 						</div>
-						<div class="rounded-lg border border-slate-100 bg-slate-50 p-3 text-center">
-							<span class="mb-2 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Exacto</span>
-							<input type="number" min="0" name="pointsExact" value={data.rules?.pointsExact ?? 3} required class="w-full rounded-lg border-2 border-slate-200 bg-white px-2 py-2 text-center text-xl font-black text-slate-800 focus:border-sky-400" />
-							<p class="mt-1 text-[9px] text-slate-400">Resultado exacto</p>
+						<div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-center">
+							<span class="mb-1 block text-[10px] font-bold uppercase text-slate-500">🥈 Subcampeón</span>
+							<input
+								type="number"
+								min="0"
+								bind:value={scoringConfig.bonusRunnerUp}
+								class="w-full rounded border border-slate-200 bg-white px-2 py-1.5 text-center text-lg font-black text-slate-700 focus:border-sky-400"
+							/>
 						</div>
-						<div class="rounded-lg border border-slate-100 bg-slate-50 p-3 text-center">
-							<span class="mb-2 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Llave</span>
-							<input type="number" min="0" name="pointsBracket" value={data.rules?.pointsBracket ?? 3} required class="w-full rounded-lg border-2 border-slate-200 bg-white px-2 py-2 text-center text-xl font-black text-slate-800 focus:border-sky-400" />
-							<p class="mt-1 text-[9px] text-slate-400">Bonus knockout</p>
+						<div class="rounded-lg border border-orange-200 bg-orange-50 p-3 text-center">
+							<span class="mb-1 block text-[10px] font-bold uppercase text-orange-600">🥉 Tercero</span>
+							<input
+								type="number"
+								min="0"
+								bind:value={scoringConfig.bonusThird}
+								class="w-full rounded border border-orange-200 bg-white px-2 py-1.5 text-center text-lg font-black text-orange-700 focus:border-orange-400"
+							/>
 						</div>
 					</div>
+				</div>
+
+				<!-- Submit -->
+				<form method="POST" action="?/updateRules" class="mt-4">
+					<input type="hidden" name="tournamentId" value={data.selectedTournament?.id} />
+					<input type="hidden" name="scoringConfigJson" value={JSON.stringify(scoringConfig)} />
 					<button type="submit" class="w-full rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-sky-700">
-						💾 Actualizar reglas
+						💾 Guardar configuración de puntuación
 					</button>
 				</form>
 			</div>

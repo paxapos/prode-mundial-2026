@@ -354,8 +354,13 @@ async function normalizeSchema(): Promise<void> {
 	await ensureColumns('users', [
 		{ name: 'nickname', definition: "nickname TEXT NOT NULL DEFAULT ''" },
 		{ name: 'role', definition: "role TEXT NOT NULL DEFAULT 'player'" },
-		{ name: 'created_at', definition: "created_at TEXT NOT NULL DEFAULT ''" }
+		{ name: 'created_at', definition: "created_at TEXT NOT NULL DEFAULT ''" },
+		{ name: 'google_id', definition: 'google_id TEXT' },
+		{ name: 'avatar_url', definition: 'avatar_url TEXT' }
 	]);
+
+	// Ensure google_id unique index exists
+	await client.execute('CREATE UNIQUE INDEX IF NOT EXISTS users_google_id_idx ON users (google_id) WHERE google_id IS NOT NULL;');
 
 	await ensureColumns('tournaments', [
 		{ name: 'header_image_url', definition: "header_image_url TEXT NOT NULL DEFAULT ''" },

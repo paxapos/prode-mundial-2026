@@ -1,25 +1,22 @@
-# Deploy en Firebase Hosting + Cloud Run con Google OAuth
+# Deploy en Cloud Run con Google OAuth
 
-Esta guía te lleva de cero a producción en `mundial2026.club`.
+Esta guía te lleva de cero a producción.
 
 ## Arquitectura
 
 ```
-mundial2026.club
-    └── Firebase Hosting (SSL, CDN, dominio custom)
-            └── Cloud Run (SvelteKit SSR, Node.js)
-                    └── Turso (libSQL DB en la nube)
+tu-dominio.com (o URL de Cloud Run)
+    └── Cloud Run (SvelteKit SSR, Node.js)
+            └── Turso (libSQL DB en la nube)
 ```
 
 ---
 
-## Paso 1 — Crear proyecto Firebase (una sola vez)
+## Paso 1 — Crear proyecto GCP (una sola vez)
 
-1. Ir a https://console.firebase.google.com/
-2. Crear proyecto nuevo → nombre ej: `prode-mundial-2026`
-3. Copiar el **Project ID** (ej: `prode-mundial-2026-abc12`)
-
-> El Project ID de Firebase = el Project ID de GCP. Los mismos.
+1. Ir a https://console.cloud.google.com/
+2. Crear proyecto nuevo
+3. Copiar el **Project ID** (ej: `mi-prode-xyz`)
 
 ---
 
@@ -30,8 +27,7 @@ gcloud config set project TU_PROJECT_ID
 gcloud services enable \
   run.googleapis.com \
   cloudbuild.googleapis.com \
-  artifactregistry.googleapis.com \
-  firebase.googleapis.com
+  artifactregistry.googleapis.com
 ```
 
 ---
@@ -41,13 +37,11 @@ gcloud services enable \
 1. Ir a https://console.cloud.google.com/apis/credentials
 2. Seleccionar el mismo proyecto
 3. **Crear credencial** → OAuth 2.0 Client ID → Aplicación web
-4. Nombre: `Prode Mundial 2026`
+4. Nombre: ej. `Prode Mundial Web`
 5. **Authorized JavaScript origins**:
-   - `https://mundial2026.club`
-   - `https://TU_PROJECT_ID.web.app`  ← Firebase Hosting URL temporal
+   - `https://tu-dominio.com` (o la URL de Cloud Run)
 6. **Authorized redirect URIs**:
-   - `https://mundial2026.club/auth/google/callback`
-   - `https://TU_PROJECT_ID.web.app/auth/google/callback`  ← para pruebas
+   - `https://tu-dominio.com/auth/google/callback`
 7. Copiar **Client ID** y **Client Secret**
 
 > En desarrollo local, agrega también:
@@ -65,10 +59,10 @@ cp .env.cloudrun.example .env.cloudrun
 Editar `.env.cloudrun` con tus valores reales:
 
 ```env
-GCP_PROJECT_ID=prode-mundial-2026-abc12
+GCP_PROJECT_ID=mi-prode-xyz
 GCP_REGION=us-central1
-SERVICE_NAME=prode-mundial-2026
-ORIGIN=https://mundial2026.club
+SERVICE_NAME=prode-mundial
+ORIGIN=https://tu-dominio.com
 SESSION_DURATION_DAYS=30
 TURSO_DATABASE_URL=libsql://tu-db.turso.io
 TURSO_AUTH_TOKEN=tu-token-de-turso
@@ -78,51 +72,35 @@ GOOGLE_CLIENT_SECRET=GOCSPX-xxxxxxxxx
 
 ---
 
-## Paso 5 — Login en Firebase CLI
+## Paso 5 — Deploy a Cloud Run
 
 ```bash
-firebase login
-firebase use TU_PROJECT_ID
-```
-
-Esto actualiza `.firebaserc` con tu proyecto real. También puedes editar `.firebaserc` a mano.
-
----
-
-## Paso 6 — Deploy completo (Cloud Run + Firebase Hosting)
-
-```bash
-pnpm deploy:firebase
+pnpm deploy
 ```
 
 El script hace:
 1. Deploy del contenedor SvelteKit a **Cloud Run** via `gcloud run deploy --source .`
 2. Configura las variables de entorno en Cloud Run
-3. Hace `firebase deploy --only hosting` para activar Firebase Hosting que apunta al servicio Cloud Run
+3. Obtiene la URL pública del servicio
 
 ---
 
-## Paso 7 — Conectar dominio `mundial2026.club` (una sola vez)
+## Paso 6 — Conectar dominio custom (opcional)
 
-### En Firebase Console:
-1. Ir a **Hosting** → tu sitio → **Agregar dominio personalizado**
-2. Escribir `mundial2026.club`
-3. Firebase te dará dos registros DNS (type `A` o `TXT` para verificación)
+Si tenés un dominio propio, podés usar Cloud Run domain mappings:
 
-### En Namecheap:
-1. Entrar a **Domain List** → `mundial2026.club` → **Manage**
-2. Ir a **Advanced DNS**
-3. Agregar los registros que Firebase te dio:
-   - Primero el record `TXT` de verificación
-   - Luego los dos registros `A` apuntando a Firebase
+```bash
+gcloud beta run domain-mappings create \
+  --service TU_SERVICE_NAME \
+  --domain tu-dominio.com \
+  --region us-central1
+```
 
-4. Esperar propagación DNS: 5 min → 24 hs
-
-> Firebase maneja el certificado SSL/TLS automáticamente.
+Luego configurá los registros DNS en tu proveedor apuntando a la IP que te indique GCP.
 
 ---
 
-## Paso 8 — Actualizar DB (schema de Google OAuth)
+## Paso 7 — Actualizar DB (schema de Google OAuth)
 
 Si es un deploy fresco con DB en Turso:
 ```bash
@@ -131,7 +109,6 @@ TURSO_DATABASE_URL=libsql://... TURSO_AUTH_TOKEN=... pnpm db:push
 
 Si ya tenés datos y querés aplicar solo la migración de Google OAuth:
 ```bash
-# Aplicar manualmente en turso shell o con drizzle-kit migrate
 TURSO_DATABASE_URL=libsql://... TURSO_AUTH_TOKEN=... pnpm db:push --force
 ```
 
@@ -143,7 +120,7 @@ TURSO_DATABASE_URL=libsql://... TURSO_AUTH_TOKEN=... pnpm db:push --force
 |---|:---:|---|
 | `TURSO_DATABASE_URL` | ✅ | URL de la base de datos Turso |
 | `TURSO_AUTH_TOKEN` | ✅ | Token de autenticación Turso |
-| `ORIGIN` | ✅ | URL pública de la app (ej: `https://mundial2026.club`) |
+| `ORIGIN` | ✅ | URL pública de la app (ej: `https://tu-dominio.com`) |
 | `SESSION_DURATION_DAYS` | ❌ | Duración sesión en días (default: 30) |
 | `GOOGLE_CLIENT_ID` | ❌* | Client ID de Google OAuth |
 | `GOOGLE_CLIENT_SECRET` | ❌* | Client Secret de Google OAuth |
@@ -156,12 +133,7 @@ TURSO_DATABASE_URL=libsql://... TURSO_AUTH_TOKEN=... pnpm db:push --force
 
 Una vez configurado todo, para actualizar la app:
 ```bash
-pnpm deploy:firebase
-```
-
-Solo Cloud Run (sin tocar Firebase Hosting):
-```bash
-pnpm deploy:cloudrun
+pnpm deploy
 ```
 
 ---
@@ -171,7 +143,6 @@ pnpm deploy:cloudrun
 | Servicio | Costo estimado |
 |---|---|
 | Cloud Run | $3–12 USD/mes |
-| Firebase Hosting | Gratis (Spark plan) |
 | Turso DB | Gratis (free tier: 500 DBs, 9 GB) |
 | **Total** | **~$3–12 USD/mes** |
 
@@ -183,12 +154,12 @@ pnpm deploy:cloudrun
 
 **Error `google_not_configured`**: Falta `GOOGLE_CLIENT_ID` en las variables de entorno del Cloud Run service.
 
-**Dominio no resuelve**: Verificar que los registros DNS en Namecheap son exactamente los que Firebase Console indicó. Puede tardar hasta 24h en propagarse.
+**Dominio no resuelve**: Verificar que los registros DNS apuntan correctamente a Cloud Run. Puede tardar hasta 24h en propagarse.
 
 **Cloud Run 403**: Verificar que el servicio tiene `--allow-unauthenticated` habilitado.
 Forzarlo manualmente:
 ```bash
-gcloud run services add-iam-policy-binding prode-mundial-2026 \
+gcloud run services add-iam-policy-binding TU_SERVICE_NAME \
   --region us-central1 \
   --member="allUsers" \
   --role="roles/run.invoker"

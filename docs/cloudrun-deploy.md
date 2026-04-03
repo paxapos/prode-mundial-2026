@@ -1,7 +1,7 @@
-# Deploy rapido con servidor (Firebase/GCP + Cloud Run)
+# Deploy rapido con Cloud Run
 
 Este proyecto usa SvelteKit con adapter-node, asi que necesita backend server.
-La opcion mas simple y barata en ecosistema Firebase es usar Cloud Run.
+La opcion mas simple y barata en GCP es usar Cloud Run.
 
 ## 1) Requisitos
 
@@ -65,4 +65,10 @@ pnpm deploy:cloudrun .env.cloudrun
 
 ## 5) Opcional: dominio propio
 
-Despues del deploy, puedes mapear un dominio desde Cloud Run o poner Firebase Hosting como frontend y reescribir al servicio de Cloud Run.
+Despues del deploy, puedes mapear un dominio custom usando Cloud Run domain mappings:
+```bash
+gcloud beta run domain-mappings create \
+  --service TU_SERVICE_NAME \
+  --domain tu-dominio.com \
+  --region us-central1
+```

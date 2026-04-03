@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Deploy SvelteKit (adapter-node) to Cloud Run using source build.
-# This is the quickest server deployment path in the Firebase/GCP ecosystem.
+# This is the quickest server deployment path in the GCP ecosystem.
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
@@ -24,7 +24,7 @@ fi
 : "${GCP_PROJECT_ID:?Missing GCP_PROJECT_ID}"
 : "${TURSO_DATABASE_URL:?Missing TURSO_DATABASE_URL}"
 
-SERVICE_NAME="${SERVICE_NAME:-prode-mundial-2026}"
+SERVICE_NAME="${SERVICE_NAME:-prode-mundial}"
 GCP_REGION="${GCP_REGION:-us-central1}"
 SESSION_DURATION_DAYS="${SESSION_DURATION_DAYS:-30}"
 TURSO_AUTH_TOKEN="${TURSO_AUTH_TOKEN:-}"

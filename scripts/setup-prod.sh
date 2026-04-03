@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# setup-prod.sh — Setup completo de GCP + Firebase + Google OAuth desde CLI
+# setup-prod.sh — Setup completo de GCP + Google OAuth desde CLI
 # Uso: ./scripts/setup-prod.sh
 # =============================================================================
 set -euo pipefail
@@ -22,7 +22,7 @@ warn() { echo -e "${YELLOW}⚠ $*${RESET}"; }
 die()  { echo -e "${RED}✗ $*${RESET}" >&2; exit 1; }
 
 # ── Requisitos ────────────────────────────────────────────────────────────────
-for cmd in gcloud firebase curl jq; do
+for cmd in gcloud curl jq; do
   command -v "${cmd}" >/dev/null 2>&1 || die "Falta: ${cmd}. Instalalo primero."
 done
 
@@ -35,19 +35,15 @@ fi
 ok "Cuenta: ${ACTIVE_ACCOUNT}"
 
 # ── 1) Proyecto GCP ───────────────────────────────────────────────────────────
-step "1/7 — Proyecto GCP"
+step "1/6 — Proyecto GCP"
 
 echo ""
 echo "Proyectos existentes en tu cuenta:"
 gcloud projects list --format="table(projectId,name)" 2>/dev/null | head -20 || true
 
-DEFAULT_PROJECT_ID="prode-mundial-2026-club"
-
 echo ""
-echo -e "${YELLOW}Usando por defecto el proyecto existente:${RESET} ${BOLD}${DEFAULT_PROJECT_ID}${RESET}"
-echo ""
-read -rp "$(echo -e "${BOLD}Project ID${RESET} [${DEFAULT_PROJECT_ID}]: ")" PROJECT_ID
-PROJECT_ID="${PROJECT_ID:-${DEFAULT_PROJECT_ID}}"
+read -rp "$(echo -e "${BOLD}Project ID${RESET}: ")" PROJECT_ID
+PROJECT_ID="${PROJECT_ID}"
 PROJECT_ID="${PROJECT_ID// /-}"
 PROJECT_ID="$(echo "${PROJECT_ID}" | tr '[:upper:]' '[:lower:]')"
 
@@ -65,7 +61,7 @@ else
     if echo "${CREATE_OUT}" | grep -q "already in use"; then
       echo ""
       echo -e "${RED}✗ El ID '${PROJECT_ID}' ya está tomado globalmente por otro proyecto GCP.${RESET}"
-      echo -e "  Si este proyecto ya existe y es tuyo, usá: ${BOLD}prode-mundial-2026-club${RESET}"
+      echo -e "  Elegí otro Project ID que esté disponible."
       echo ""
       read -rp "$(echo -e "${BOLD}Nuevo Project ID${RESET}: ")" PROJECT_ID
       PROJECT_ID="${PROJECT_ID// /-}"
@@ -85,7 +81,7 @@ PROJECT_NUMBER="$(gcloud projects describe "${PROJECT_ID}" --format='value(proje
 ok "Project Number: ${PROJECT_NUMBER}"
 
 # ── 2) Billing ────────────────────────────────────────────────────────────────
-step "2/7 — Billing"
+step "2/6 — Billing"
 
 # Verificar si ya tiene billing
 BILLING_ENABLED="$(gcloud billing projects describe "${PROJECT_ID}" --format='value(billingEnabled)' 2>/dev/null || echo 'False')"
@@ -131,43 +127,26 @@ if [[ "${BILLING_ENABLED}" != "True" ]]; then
 fi
 
 # ── 3) Habilitar APIs ─────────────────────────────────────────────────────────
-step "3/7 — Habilitando APIs"
+step "3/6 — Habilitando APIs"
 
 gcloud services enable \
   run.googleapis.com \
   cloudbuild.googleapis.com \
   artifactregistry.googleapis.com \
-  firebase.googleapis.com \
   iap.googleapis.com \
   secretmanager.googleapis.com \
   --project "${PROJECT_ID}"
 
 ok "APIs habilitadas"
 
-# ── 4) Firebase Hosting ───────────────────────────────────────────────────────
-step "4/7 — Firebase Hosting"
-
-# Asegurar .firebaserc valido antes de ejecutar comandos firebase
-cat > "${PROJECT_ROOT}/.firebaserc" <<EOF
-{
-  "projects": {
-    "default": "${PROJECT_ID}"
-  }
-}
-EOF
-ok ".firebaserc actualizado → ${PROJECT_ID}"
-
-firebase login --no-localhost 2>/dev/null || firebase login
-
-# Añadir Firebase al proyecto GCP (crea el sitio de hosting)
-firebase projects:addfirebase "${PROJECT_ID}" --project "${PROJECT_ID}" 2>/dev/null && ok "Firebase añadido al proyecto" || \
-  ok "Firebase ya estaba configurado en ${PROJECT_ID}"
-
-# ── 5) Google OAuth credentials ───────────────────────────────────────────────
-step "5/7 — Credenciales Google OAuth"
+# ── 4) Google OAuth credentials ───────────────────────────────────────────────
+step "4/6 — Credenciales Google OAuth"
 
 ACCESS_TOKEN="$(gcloud auth print-access-token)"
-DOMAIN="${DOMAIN:-mundial2026.club}"
+DOMAIN="${DOMAIN:-}"
+if [[ -z "${DOMAIN}" ]]; then
+  read -rp "$(echo -e "${BOLD}Dominio de la app${RESET} (ej: miprode.com, o dejá vacío para usar la URL de Cloud Run): ")" DOMAIN
+fi
 
 # Habilitar la API de Identity Platform (necesaria para OAuth consent)
 echo "Habilitando API oauth2..."
@@ -198,8 +177,7 @@ echo -e "${YELLOW}║  En la ventana que se abre:                               
 echo -e "${YELLOW}║  1) Application type: ${BOLD}Web application${RESET}${YELLOW}                          ║${RESET}"
 echo -e "${YELLOW}║  2) Name: ${BOLD}prode-mundial-web${RESET}${YELLOW}                                   ║${RESET}"
 echo -e "${YELLOW}║  3) Authorized redirect URIs → Agregar:                          ║${RESET}"
-echo -e "${CYAN}║     https://${DOMAIN}/auth/google/callback${RESET}"
-echo -e "${CYAN}║     https://${PROJECT_ID}.web.app/auth/google/callback${RESET}"
+echo -e "${CYAN}║     https://\${DOMAIN}/auth/google/callback${RESET}"
 echo -e "${YELLOW}║  4) Click CREAR → Copiar Client ID y Client Secret               ║${RESET}"
 echo -e "${YELLOW}╚══════════════════════════════════════════════════════════════════╝${RESET}"
 
@@ -223,8 +201,8 @@ echo ""
 : "${OAUTH_CLIENT_SECRET:?Client Secret requerido}"
 ok "Credenciales OAuth recibidas"
 
-# ── 6) Turso DB ───────────────────────────────────────────────────────────────
-step "6/7 — Base de datos Turso"
+# ── 5) Turso DB ───────────────────────────────────────────────────────────────
+step "5/6 — Base de datos Turso"
 
 if [[ -f "${ENV_FILE}" ]]; then
   # shellcheck disable=SC1090
@@ -244,8 +222,8 @@ cat > "${ENV_FILE}" <<EOF
 # Generado por setup-prod.sh — $(date)
 GCP_PROJECT_ID=${PROJECT_ID}
 GCP_REGION=us-central1
-SERVICE_NAME=prode-mundial-2026
-ORIGIN=https://${DOMAIN}
+SERVICE_NAME=prode-mundial
+ORIGIN=https://${DOMAIN:-\${SERVICE_URL}}
 SESSION_DURATION_DAYS=30
 TURSO_DATABASE_URL=${TURSO_DATABASE_URL}
 TURSO_AUTH_TOKEN=${TURSO_AUTH_TOKEN}
@@ -254,19 +232,19 @@ GOOGLE_CLIENT_SECRET=${OAUTH_CLIENT_SECRET}
 EOF
 ok ".env.cloudrun guardado"
 
-# ── 7) Deploy ─────────────────────────────────────────────────────────────────
-step "7/7 — Deploy"
+# ── 6) Deploy ─────────────────────────────────────────────────────────────────
+step "6/6 — Deploy"
 
 echo ""
 read -rp "$(echo -e "${BOLD}¿Deployar ahora?${RESET} [S/n]: ")" DO_DEPLOY
 DO_DEPLOY="${DO_DEPLOY:-S}"
 
 if [[ "${DO_DEPLOY}" =~ ^[Ss]$ ]]; then
-  bash "${SCRIPT_DIR}/deploy-firebase.sh" "${ENV_FILE}"
+  bash "${SCRIPT_DIR}/deploy-cloudrun.sh" "${ENV_FILE}"
 else
   echo ""
   ok "Variables guardadas. Para deployar después:"
-  echo "  pnpm deploy:firebase"
+  echo "  pnpm deploy"
 fi
 
 # ── Resumen final ─────────────────────────────────────────────────────────────
@@ -276,10 +254,12 @@ echo -e "${GREEN}${BOLD}  Setup completo ✓${RESET}"
 echo -e "${GREEN}${BOLD}════════════════════════════════════════${RESET}"
 echo ""
 echo -e "  Proyecto GCP:   ${BOLD}${PROJECT_ID}${RESET}"
-echo -e "  Dominio:        ${BOLD}https://${DOMAIN}${RESET}"
+echo -e "  Dominio:        ${BOLD}https://${DOMAIN:-<se usará URL de Cloud Run>}${RESET}"
 echo -e "  Variables:      ${BOLD}.env.cloudrun${RESET}"
 echo ""
-echo -e "${YELLOW}Próximo paso — DNS en Namecheap:${RESET}"
-echo "  Firebase Console → Hosting → Agregar dominio → ${DOMAIN}"
-echo "  Copiar records DNS → Advanced DNS en Namecheap"
+if [[ -n "${DOMAIN}" ]]; then
+  echo -e "${YELLOW}Próximo paso — Configurar DNS:${RESET}"
+  echo "  Apuntá tu dominio ${DOMAIN} a la URL de Cloud Run."
+  echo "  Podés usar Cloud Run domain mappings o tu proveedor DNS."
+fi
 echo ""

@@ -323,11 +323,10 @@ Healthcheck:
 Este README define la logica de negocio del prode y la estructura del torneo.
 Si FIFA ajusta cruces oficiales de ronda de 32, se actualiza esta seccion sin cambiar la base del sistema de puntuacion.
 
-## 14) Deploy en produccion — Firebase Hosting + Cloud Run
+## 14) Deploy en produccion — Cloud Run
 
 El stack de produccion usa:
 - **Cloud Run** (Google): corre el servidor SvelteKit SSR
-- **Firebase Hosting**: dominio custom `mundial2026.club`, SSL automatico, CDN
 - **Google OAuth**: login con cuenta de Google
 
 ### Deploy rapido
@@ -335,23 +334,21 @@ El stack de produccion usa:
 ```bash
 cp .env.cloudrun.example .env.cloudrun
 # editar .env.cloudrun con tus valores reales
-firebase login
-firebase use TU_PROJECT_ID
-pnpm deploy:firebase
+pnpm deploy
 ```
 
 ### Variables de entorno requeridas
 
 | Variable | Descripcion |
 |---|---|
-| `GCP_PROJECT_ID` | ID del proyecto Firebase/GCP |
+| `GCP_PROJECT_ID` | ID del proyecto GCP |
 | `TURSO_DATABASE_URL` | URL de Turso DB |
 | `TURSO_AUTH_TOKEN` | Token de Turso |
-| `ORIGIN` | URL publica (`https://mundial2026.club`) |
+| `ORIGIN` | URL publica (ej: `https://tu-dominio.com`) |
 | `GOOGLE_CLIENT_ID` | Client ID de Google OAuth |
 | `GOOGLE_CLIENT_SECRET` | Client Secret de Google OAuth |
 
-### Guias completas
+### Guia completa
 
-- [docs/firebase-deploy-guia-completa.md](docs/firebase-deploy-guia-completa.md) — Guia paso a paso de cero a produccion
-- [docs/firebase-cloudrun-deploy.md](docs/firebase-cloudrun-deploy.md) — Solo Cloud Run (sin Firebase Hosting)
+- [docs/deploy-guia-completa.md](docs/deploy-guia-completa.md) — Guia paso a paso de deploy a Cloud Run
+- [docs/cloudrun-deploy.md](docs/cloudrun-deploy.md) — Deploy rapido a Cloud Run

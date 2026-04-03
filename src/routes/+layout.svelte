@@ -34,14 +34,15 @@
 				PRODE 2026
 			</a>
 			<a href="/" class="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100">Inicio</a>
-			{#if data.activeTournament}
-				<a href={`/${data.activeTournament.alias}`} class="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100">
-					Tabla {data.activeTournament.name}
-				</a>
-			{/if}
 			{#if data.user}
+				{#each data.tournaments as tournament}
+					<a href={`/${tournament.alias}`} class="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100">
+						Tabla {tournament.name}
+					</a>
+				{/each}
 				<a href="/prode" class="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100">Mi Prode</a>
 			{/if}
+			<a href="/estadisticas" class="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100">Estadísticas</a>
 			{#if data.user?.role === 'admin'}
 				<a href="/admin" class="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100">Administracion</a>
 			{/if}

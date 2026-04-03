@@ -263,6 +263,67 @@
 		</div>
 	</div>
 
+	<!-- ═══ PREDICTIONS HIDDEN BEFORE TOURNAMENT START ═══ -->
+	{#if !data.canViewPredictions}
+		<div class="relative">
+			<!-- Blurred fixture preview -->
+			<div class="pointer-events-none select-none blur-md" aria-hidden="true">
+				<div class="grid gap-6 lg:grid-cols-2">
+					{#each GROUPS.slice(0, 4) as group}
+						{@const gc = GC[group] ?? GC.A}
+						{@const gMatches = groupMatches.filter((m: Match) => m.groupCode === group)}
+						<div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg">
+							<div class="{gc.bg} px-5 py-3">
+								<h3 class="text-lg font-black text-white">Grupo {group}</h3>
+							</div>
+							<div class="space-y-0 divide-y divide-slate-100 px-4 py-2">
+								{#each gMatches.slice(0, 3) as match}
+									<div class="py-2.5">
+										<div class="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+											<div class="flex items-center justify-end gap-1.5">
+												<span class="text-sm font-semibold text-slate-800">{match.teamA}</span>
+												{#if getFlagUrl(match.teamA)}
+													<img src={getFlagUrl(match.teamA, 40)} alt="" class="h-5 w-7 rounded-sm object-cover" />
+												{/if}
+											</div>
+											<div class="flex items-center gap-1">
+												<span class="flex h-9 w-10 items-center justify-center rounded-lg border-2 border-slate-200 bg-slate-50 text-sm font-black text-slate-800">?</span>
+												<span class="text-xs font-bold text-slate-300">:</span>
+												<span class="flex h-9 w-10 items-center justify-center rounded-lg border-2 border-slate-200 bg-slate-50 text-sm font-black text-slate-800">?</span>
+											</div>
+											<div class="flex items-center gap-1.5">
+												{#if getFlagUrl(match.teamB)}
+													<img src={getFlagUrl(match.teamB, 40)} alt="" class="h-5 w-7 rounded-sm object-cover" />
+												{/if}
+												<span class="text-sm font-semibold text-slate-800">{match.teamB}</span>
+											</div>
+										</div>
+									</div>
+								{/each}
+							</div>
+						</div>
+					{/each}
+				</div>
+			</div>
+			<!-- Overlay message -->
+			<div class="absolute inset-0 flex items-center justify-center">
+				<div class="rounded-2xl border border-amber-200 bg-white/95 px-8 py-6 text-center shadow-xl backdrop-blur">
+					<span class="text-4xl">🔒</span>
+					<h2 class="mt-3 text-xl font-black text-slate-800">Pronósticos ocultos</h2>
+					<p class="mt-2 max-w-sm text-sm text-slate-600">
+						Hasta que no comience el torneo no se pueden ver los pronósticos de otros usuarios.
+					</p>
+					<a
+						href="/{data.tournament.alias}"
+						class="mt-4 inline-flex items-center gap-2 rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-slate-700"
+					>
+						📊 Ver tabla de posiciones
+					</a>
+				</div>
+			</div>
+		</div>
+	{:else}
+
 	<!-- ═══ POINTS SUMMARY ═══ -->
 	{#if data.matchDetails && data.matchDetails.length > 0}
 		{@const outcomeTotal = data.matchDetails.reduce((s: number, d: { outcomePoints: number }) => s + d.outcomePoints, 0)}
@@ -668,6 +729,7 @@
 			</div>
 		{/if}
 	{/each}
+	{/if}
 </section>
 
 <style>

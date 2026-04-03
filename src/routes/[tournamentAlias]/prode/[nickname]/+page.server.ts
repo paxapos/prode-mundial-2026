@@ -29,15 +29,20 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 	const isAdmin = currentUser?.role === 'admin';
 	const canEdit = isOwner || isAdmin;
 
+	const settings = await getTournamentSettings(tournament.id);
+	const tournamentStarted = Date.now() >= new Date(settings.tournamentStartAt).getTime();
+	const canViewPredictions = isOwner || isAdmin || tournamentStarted;
+
 	return {
 		tournament,
 		profileUser: { id: profileUser.id, nickname: profileUser.nickname, avatarUrl: profileUser.avatarUrl },
 		matches: await listMatches(tournament.id),
-		predictions: await listPredictionsForUser(profileUser.id, tournament.id),
-		settings: await getTournamentSettings(tournament.id),
-		matchDetails: await getPlayerMatchDetails(profileUser.id, tournament.id),
+		predictions: canViewPredictions ? await listPredictionsForUser(profileUser.id, tournament.id) : [],
+		settings,
+		matchDetails: canViewPredictions ? await getPlayerMatchDetails(profileUser.id, tournament.id) : [],
 		canEdit,
-		isOwner
+		isOwner,
+		canViewPredictions
 	};
 };
 

@@ -2,6 +2,7 @@
 	import { deserialize } from '$app/forms';
 	import { page } from '$app/stores';
 	import { Badge } from 'flowbite-svelte';
+	const ogImage = $derived(`${$page.url.origin}/og-image.jpg`);
 	import { getFlagUrl, GROUPS, VENUES } from '$lib/teams';
 	import { calcStandings, buildBracket, type LivePred } from '$lib/bracket-engine';
 	import { STAGE_LABELS } from '$lib/scoring-config';
@@ -185,20 +186,25 @@
 		}
 	}
 
-	const pageTitle = $derived(`Prode de ${data.profileUser.nickname} | ${data.tournament.name}`);
-	const pageDescription = $derived(`Mirá los pronósticos de ${data.profileUser.nickname} para el ${data.tournament.name}. Prode Mundial 2026.`);
+	const pageTitle = $derived(`Mirá el prode de ${data.profileUser.nickname} ⚽`);
+	const pageDescription = $derived(`Mirá el prode de ${data.profileUser.nickname} para el ${data.tournament.name}. Prode para los amigos, Mundial 2026.`);
 </script>
 
 <svelte:head>
 	<title>{pageTitle}</title>
+	<meta name="description" content={pageDescription} />
 	<meta property="og:title" content={pageTitle} />
 	<meta property="og:description" content={pageDescription} />
-	<meta property="og:image" content="/mundial_2026.png" />
+	<meta property="og:image" content={ogImage} />
+	<meta property="og:image:width" content="1200" />
+	<meta property="og:image:height" content="630" />
+	<meta property="og:image:type" content="image/jpeg" />
 	<meta property="og:type" content="website" />
+	<meta property="og:url" content={$page.url.href} />
 	<meta name="twitter:card" content="summary_large_image" />
 	<meta name="twitter:title" content={pageTitle} />
 	<meta name="twitter:description" content={pageDescription} />
-	<meta name="twitter:image" content="/mundial_2026.png" />
+	<meta name="twitter:image" content={ogImage} />
 </svelte:head>
 
 <section class="space-y-6">

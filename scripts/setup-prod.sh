@@ -244,7 +244,7 @@ if [[ "${DO_DEPLOY}" =~ ^[Ss]$ ]]; then
 else
   echo ""
   ok "Variables guardadas. Para deployar después:"
-  echo "  pnpm deploy"
+  echo "  pnpm ship"
 fi
 
 # ── Resumen final ─────────────────────────────────────────────────────────────

@@ -75,7 +75,7 @@ GOOGLE_CLIENT_SECRET=GOCSPX-xxxxxxxxx
 ## Paso 5 — Deploy a Cloud Run
 
 ```bash
-pnpm deploy
+pnpm ship
 ```
 
 El script hace:
@@ -133,7 +133,7 @@ TURSO_DATABASE_URL=libsql://... TURSO_AUTH_TOKEN=... pnpm db:push --force
 
 Una vez configurado todo, para actualizar la app:
 ```bash
-pnpm deploy
+pnpm ship
 ```
 
 ---

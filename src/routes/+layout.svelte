@@ -1,9 +1,12 @@
 <script lang="ts">
 	import '../app.css';
 	import { Badge, Button } from 'flowbite-svelte';
+	import { page } from '$app/stores';
 	import favicon from '$lib/assets/favicon.svg';
 
 	let { children, data } = $props();
+
+	const ogImage = $derived(`${$page.url.origin}/og-image.jpg`);
 
 	const stateTone: Record<string, 'gray' | 'green' | 'yellow' | 'purple'> = {
 		draft: 'gray',
@@ -15,15 +18,20 @@
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
-	<title>Prode Mundial 2026</title>
-	<meta property="og:title" content="Prode Mundial 2026" />
-	<meta property="og:description" content="Armá tu prode del Mundial 2026 y competí con amigos." />
-	<meta property="og:image" content="/mundial_2026.png" />
+	<title>Prode Mundial 2026 ⚽</title>
+	<meta name="description" content="Prode para los amigos, Mundial 2026" />
+	<meta property="og:title" content="Prode Mundial 2026 ⚽" />
+	<meta property="og:description" content="Prode para los amigos, Mundial 2026" />
+	<meta property="og:image" content={ogImage} />
+	<meta property="og:image:width" content="1200" />
+	<meta property="og:image:height" content="630" />
+	<meta property="og:image:type" content="image/jpeg" />
 	<meta property="og:type" content="website" />
+	<meta property="og:url" content={$page.url.href} />
 	<meta name="twitter:card" content="summary_large_image" />
-	<meta name="twitter:title" content="Prode Mundial 2026" />
-	<meta name="twitter:description" content="Armá tu prode del Mundial 2026 y competí con amigos." />
-	<meta name="twitter:image" content="/mundial_2026.png" />
+	<meta name="twitter:title" content="Prode Mundial 2026 ⚽" />
+	<meta name="twitter:description" content="Prode para los amigos, Mundial 2026" />
+	<meta name="twitter:image" content={ogImage} />
 </svelte:head>
 
 <div class="mx-auto min-h-screen max-w-6xl px-4 pb-10 pt-6 md:px-6">

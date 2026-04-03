@@ -334,7 +334,7 @@ El stack de produccion usa:
 ```bash
 cp .env.cloudrun.example .env.cloudrun
 # editar .env.cloudrun con tus valores reales
-pnpm deploy
+pnpm ship
 ```
 
 ### Variables de entorno requeridas

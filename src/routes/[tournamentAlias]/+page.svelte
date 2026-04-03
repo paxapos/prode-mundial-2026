@@ -1,21 +1,28 @@
 <script lang="ts">
+	import { page } from '$app/stores';
 	import { STAGE_LABELS } from '$lib/scoring-config';
 	import type { MatchStage } from '$lib/types';
 	let { data } = $props();
+	const ogImage = $derived(`${$page.url.origin}/og-image.jpg`);
 
 	const STAGES: MatchStage[] = ['groups', 'round32', 'round16', 'quarterfinal', 'semifinal', 'final'];
 </script>
 
 <svelte:head>
 	<title>{data.tournament.name} | Tabla</title>
-	<meta property="og:title" content="{data.tournament.name} | Tabla de posiciones" />
-	<meta property="og:description" content="Mirá la tabla de posiciones del prode {data.tournament.name}." />
-	<meta property="og:image" content="/mundial_2026.png" />
+	<meta name="description" content="Tabla de posiciones del prode {data.tournament.name}. Prode para los amigos, Mundial 2026." />
+	<meta property="og:title" content="{data.tournament.name} | Tabla de posiciones ⚽" />
+	<meta property="og:description" content="Tabla de posiciones del prode {data.tournament.name}. Prode para los amigos, Mundial 2026." />
+	<meta property="og:image" content={ogImage} />
+	<meta property="og:image:width" content="1200" />
+	<meta property="og:image:height" content="630" />
+	<meta property="og:image:type" content="image/jpeg" />
 	<meta property="og:type" content="website" />
+	<meta property="og:url" content={$page.url.href} />
 	<meta name="twitter:card" content="summary_large_image" />
-	<meta name="twitter:title" content="{data.tournament.name} | Tabla de posiciones" />
-	<meta name="twitter:description" content="Mirá la tabla de posiciones del prode {data.tournament.name}." />
-	<meta name="twitter:image" content="/mundial_2026.png" />
+	<meta name="twitter:title" content="{data.tournament.name} | Tabla de posiciones ⚽" />
+	<meta name="twitter:description" content="Tabla de posiciones del prode {data.tournament.name}. Prode para los amigos, Mundial 2026." />
+	<meta name="twitter:image" content={ogImage} />
 </svelte:head>
 
 <section class="space-y-8">

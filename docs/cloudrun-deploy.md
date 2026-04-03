@@ -42,7 +42,7 @@ Desde la raiz del repo:
 
 ```bash
 chmod +x scripts/deploy-cloudrun.sh
-pnpm deploy:cloudrun
+pnpm ship
 ```
 
 El script:
@@ -55,7 +55,7 @@ El script:
 Tambien puedes pasar otro archivo de variables si quieres:
 
 ```bash
-pnpm deploy:cloudrun .env.cloudrun
+pnpm ship .env.cloudrun
 ```
 
 ## 4) Costo estimado para tu caso (100-200 visitas/dia)

@@ -9,7 +9,7 @@
 		"build": "vite build",
 		"preview": "vite preview",
 		"start": "node build",
-		"deploy": "./scripts/deploy-cloudrun.sh",
+		"ship": "./scripts/deploy-cloudrun.sh",
 		"deploy:cloudrun": "./scripts/deploy-cloudrun.sh",
 		"setup:prod": "./scripts/setup-prod.sh",
 		"smoke:health": "node ./scripts/smoke-health.mjs",

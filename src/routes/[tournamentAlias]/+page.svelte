@@ -10,9 +10,9 @@
 
 <svelte:head>
 	<title>{data.tournament.name} | Tabla</title>
-	<meta name="description" content="Tabla de posiciones del prode {data.tournament.name}. Prode para los amigos, Mundial 2026." />
+	<meta name="description" content="Tabla de posiciones de la liga {data.tournament.name}. Prode para los amigos, Mundial 2026." />
 	<meta property="og:title" content="{data.tournament.name} | Tabla de posiciones ⚽" />
-	<meta property="og:description" content="Tabla de posiciones del prode {data.tournament.name}. Prode para los amigos, Mundial 2026." />
+	<meta property="og:description" content="Tabla de posiciones de la liga {data.tournament.name}. Prode para los amigos, Mundial 2026." />
 	<meta property="og:image" content={ogImage} />
 	<meta property="og:image:width" content="1200" />
 	<meta property="og:image:height" content="630" />
@@ -21,14 +21,14 @@
 	<meta property="og:url" content={$page.url.href} />
 	<meta name="twitter:card" content="summary_large_image" />
 	<meta name="twitter:title" content="{data.tournament.name} | Tabla de posiciones ⚽" />
-	<meta name="twitter:description" content="Tabla de posiciones del prode {data.tournament.name}. Prode para los amigos, Mundial 2026." />
+	<meta name="twitter:description" content="Tabla de posiciones de la liga {data.tournament.name}. Prode para los amigos, Mundial 2026." />
 	<meta name="twitter:image" content={ogImage} />
 </svelte:head>
 
 <section class="space-y-8">
 	<div>
 		<h1 class="text-4xl font-black tracking-tight text-slate-900">{data.tournament.name}</h1>
-		<p class="mt-1 text-base text-slate-500">Tabla de participantes para este torneo.</p>
+		<p class="mt-1 text-base text-slate-500">Tabla de posiciones de la liga.</p>
 	</div>
 
 	<div class="w-full overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">

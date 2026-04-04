@@ -66,6 +66,7 @@ export const tournaments = sqliteTable(
 		startAt: text('start_at').notNull(),
 		lockReason: text('lock_reason'),
 		scoringConfigJson: text('scoring_config_json').notNull(),
+		parentTournamentId: text('parent_tournament_id'),
 		createdAt: text('created_at').notNull()
 	},
 	(table) => ({

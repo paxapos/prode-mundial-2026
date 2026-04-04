@@ -27,7 +27,7 @@
 
 	const tabItems: { id: AdminTab; label: string; icon: string }[] = [
 		{ id: 'resultados', label: 'Resultados', icon: '⚽' },
-		{ id: 'torneos', label: 'Torneos', icon: '🏆' },
+		{ id: 'torneos', label: 'Ligas', icon: '🏆' },
 		{ id: 'usuarios', label: 'Usuarios', icon: '👥' },
 		{ id: 'config', label: 'Config', icon: '⚙️' }
 	];
@@ -113,7 +113,7 @@
 				<div>
 					<h1 class="text-2xl font-black tracking-tight md:text-3xl">Panel de Administración</h1>
 					<p class="text-sm text-white/50">
-						{data.selectedTournament?.name ?? 'Sin torneo seleccionado'}
+						{data.selectedTournament?.name ?? 'Sin competición seleccionada'}
 						{#if matchStats.total > 0}
 							· {matchStats.closed}/{matchStats.total} partidos cargados
 						{/if}
@@ -377,7 +377,7 @@
 	{#if activeTab === 'torneos'}
 		<!-- Tournament selector -->
 		<div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-			<h2 class="mb-4 text-lg font-black text-slate-800">Torneos existentes</h2>
+			<h2 class="mb-4 text-lg font-black text-slate-800">Competiciones</h2>
 			<div class="flex flex-wrap gap-2">
 				{#each data.tournaments as tournament}
 					<a
@@ -387,21 +387,70 @@
 							? 'border-sky-400 bg-sky-50 text-sky-700 shadow-sm'
 							: 'border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'}"
 					>
-						<span class="text-base">🏆</span>
+						<span class="text-base">{tournament.parentTournamentId ? '🏅' : '🏆'}</span>
 						{tournament.name}
+						{#if tournament.parentTournamentId}
+							<span class="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-600">LIGA</span>
+						{/if}
 					</a>
 				{/each}
 			</div>
 		</div>
 
-		<!-- Create tournament -->
+		<!-- Create Liga -->
+		{#if data.selectedTournament && !data.selectedTournament.parentTournamentId}
+			<div class="rounded-xl border border-emerald-200 bg-emerald-50/50 p-5 shadow-sm">
+				<h2 class="mb-1 text-lg font-black text-slate-800">Crear nueva Liga</h2>
+				<p class="mb-4 text-xs text-slate-500">Una liga es un grupo de amigos que compiten entre sí con sus pronósticos dentro de {data.selectedTournament.name}.</p>
+				<form method="POST" action="?/createLiga" class="space-y-4">
+					<input type="hidden" name="parentTournamentId" value={data.selectedTournament.id} />
+					<div class="grid gap-4 md:grid-cols-2">
+						<div>
+							<span class="mb-1 block text-xs font-bold text-slate-500">Nombre de la liga</span>
+							<input name="name" required placeholder="Liga del Trabajo" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20" />
+						</div>
+						<div>
+							<span class="mb-1 block text-xs font-bold text-slate-500">Alias URL (opcional)</span>
+							<input name="alias" placeholder="liga-trabajo" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20" />
+							<p class="mt-1 text-[10px] text-slate-400">Se genera del nombre si lo dejás vacío</p>
+						</div>
+					</div>
+					<button type="submit" class="rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700">
+						🏅 Crear liga
+					</button>
+				</form>
+			</div>
+
+			<!-- Existing ligas -->
+			{#if data.ligas.length > 0}
+				<div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+					<h2 class="mb-4 text-lg font-black text-slate-800">Ligas creadas</h2>
+					<div class="space-y-2">
+						{#each data.ligas as liga}
+							<div class="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-4 py-3">
+								<div class="flex items-center gap-3">
+									<span class="text-lg">🏅</span>
+									<div>
+										<p class="text-sm font-bold text-slate-800">{liga.name}</p>
+										<p class="text-xs text-slate-400">/{liga.alias}</p>
+									</div>
+								</div>
+								<a href={`/${liga.alias}`} class="rounded-lg bg-sky-100 px-3 py-1.5 text-xs font-bold text-sky-700 hover:bg-sky-200">Ver tabla</a>
+							</div>
+						{/each}
+					</div>
+				</div>
+			{/if}
+		{/if}
+
+		<!-- Create tournament (competition) -->
 		<div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-			<h2 class="mb-1 text-lg font-black text-slate-800">Crear nuevo torneo</h2>
+			<h2 class="mb-1 text-lg font-black text-slate-800">Crear nueva competición</h2>
 			<p class="mb-4 text-xs text-slate-400">Definí nombre, alias URL, fecha de inicio y reglas de puntuación.</p>
 			<form method="POST" action="?/createTournament" class="space-y-4">
 				<div class="grid gap-4 md:grid-cols-2">
 					<div>
-						<span class="mb-1 block text-xs font-bold text-slate-500">Nombre del torneo</span>
+						<span class="mb-1 block text-xs font-bold text-slate-500">Nombre de la competición</span>
 						<input name="name" required placeholder="Copa del Barrio 2026" class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20" />
 					</div>
 					<div>
@@ -421,9 +470,9 @@
 				<div class="grid grid-cols-3 gap-3">
 					<!-- Points info note -->
 				</div>
-				<p class="text-xs text-slate-400">La puntuación se configura después de crear el torneo, desde la pestaña Config.</p>
+				<p class="text-xs text-slate-400">La puntuación se configura después de crear la competición, desde la pestaña Config.</p>
 				<button type="submit" class="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 md:w-auto md:px-8">
-					🏆 Crear torneo
+					🏆 Crear competición
 				</button>
 			</form>
 		</div>
@@ -431,7 +480,7 @@
 		<!-- Add match -->
 		<div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
 			<h2 class="mb-1 text-lg font-black text-slate-800">Agregar partido</h2>
-			<p class="mb-4 text-xs text-slate-400">Agregá partidos manualmente al torneo seleccionado.</p>
+			<p class="mb-4 text-xs text-slate-400">Agregá partidos manualmente a la competición seleccionada.</p>
 			<form method="POST" action="?/addMatch" class="space-y-4">
 				<input type="hidden" name="tournamentId" value={data.selectedTournament?.id} />
 				<div class="grid gap-4 md:grid-cols-3">
@@ -480,7 +529,7 @@
 			<!-- Create user -->
 			<div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
 				<h2 class="mb-1 text-lg font-black text-slate-800">Crear usuario</h2>
-				<p class="mb-4 text-xs text-slate-400">El usuario se asigna automáticamente al torneo activo.</p>
+				<p class="mb-4 text-xs text-slate-400">El usuario se asigna automáticamente a la competición activa.</p>
 				<form method="POST" action="?/createUser" class="space-y-3">
 					<div>
 						<span class="mb-1 block text-xs font-bold text-slate-500">Email</span>
@@ -507,10 +556,10 @@
 				</form>
 			</div>
 
-			<!-- Assign user to tournament -->
+			<!-- Assign user to liga -->
 			<div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-				<h2 class="mb-1 text-lg font-black text-slate-800">Asignar a torneo</h2>
-				<p class="mb-4 text-xs text-slate-400">Agregá un usuario existente a un torneo.</p>
+				<h2 class="mb-1 text-lg font-black text-slate-800">Asignar a liga</h2>
+				<p class="mb-4 text-xs text-slate-400">Agregá un usuario a una liga para que participe del prode.</p>
 				<form method="POST" action="?/assignUser" class="space-y-3">
 					<div>
 						<span class="mb-1 block text-xs font-bold text-slate-500">Usuario</span>
@@ -521,15 +570,17 @@
 						</select>
 					</div>
 					<div>
-						<span class="mb-1 block text-xs font-bold text-slate-500">Torneo</span>
+						<span class="mb-1 block text-xs font-bold text-slate-500">Liga / Competición</span>
 						<select name="tournamentId" class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm">
 							{#each data.tournaments as tournament}
-								<option value={tournament.id}>{tournament.name}</option>
+								<option value={tournament.id}>
+									{tournament.parentTournamentId ? '🏅 Liga: ' : '🏆 '}{tournament.name}
+								</option>
 							{/each}
 						</select>
 					</div>
 					<button type="submit" class="w-full rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-sky-700">
-						🔗 Asignar a torneo
+						🔗 Asignar a liga
 					</button>
 				</form>
 			</div>
@@ -687,11 +738,11 @@
 
 			<!-- Lock tournament -->
 			<div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-				<h2 class="mb-1 text-lg font-black text-slate-800">Bloqueo del torneo</h2>
+				<h2 class="mb-1 text-lg font-black text-slate-800">Bloqueo de la competición</h2>
 				<p class="mb-4 text-xs text-slate-400">Bloqueá los pronósticos manualmente. Esto impide que los jugadores editen sus predicciones.</p>
 				{#if data.settings?.state === 'locked'}
 					<div class="mb-4 rounded-lg border border-red-200 bg-red-50 p-3">
-						<p class="text-xs font-bold text-red-700">🔒 Torneo actualmente bloqueado</p>
+						<p class="text-xs font-bold text-red-700">🔒 Competición actualmente bloqueada</p>
 						{#if data.settings.lockReason}
 							<p class="mt-1 text-xs text-red-600">Motivo: {data.settings.lockReason}</p>
 						{/if}

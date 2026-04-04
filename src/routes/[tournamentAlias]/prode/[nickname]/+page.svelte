@@ -317,7 +317,7 @@
 					<span class="text-4xl">🔒</span>
 					<h2 class="mt-3 text-xl font-black text-slate-800">Pronósticos ocultos</h2>
 					<p class="mt-2 max-w-sm text-sm text-slate-600">
-						Hasta que no comience el torneo no se pueden ver los pronósticos de otros usuarios.
+						Hasta que no comience la competición no se pueden ver los pronósticos de otros usuarios.
 					</p>
 					<a
 						href="/{data.tournament.alias}"

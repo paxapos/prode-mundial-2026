@@ -4,44 +4,44 @@ import type { SideWinner } from '$lib/types';
 import {
 	getActiveTournament,
 	getPlayerMatchDetails,
-	getTournamentByAlias,
 	getTournamentSettings,
+	listLigas,
 	listMatches,
 	listPredictionsForUser,
-	listTournaments,
 	listUserTournamentIds,
 	savePrediction
 } from '$lib/server/state';
 
-export const load: PageServerLoad = async ({ locals, url }) => {
+export const load: PageServerLoad = async ({ locals }) => {
 	if (!locals.user) {
 		throw redirect(302, '/login');
 	}
-	const wantedAlias = url.searchParams.get('t');
-	const active = wantedAlias ? await getTournamentByAlias(wantedAlias) : await getActiveTournament();
-	if (!active) {
-		return { tournaments: [], selectedTournament: null, matches: [], predictions: [], settings: null };
+	// Always load from the source tournament (the competition with matches)
+	const source = await getActiveTournament();
+	if (!source) {
+		return { ligas: [], sourceTournament: null, matches: [], predictions: [], settings: null };
 	}
 
 	const userTournamentIds = await listUserTournamentIds(locals.user.id);
-	if (!userTournamentIds.includes(active.id)) {
+	const hasAccess = userTournamentIds.includes(source.id) || userTournamentIds.some(id => id !== source.id);
+	if (!hasAccess) {
 		return {
-			tournaments: await listTournaments(),
-			selectedTournament: active,
+			ligas: await listLigas(source.id),
+			sourceTournament: source,
 			matches: [],
 			predictions: [],
-			settings: await getTournamentSettings(active.id),
-			message: 'Todavia no estas asignado a este torneo.'
+			settings: await getTournamentSettings(source.id),
+			message: 'Todavia no estas asignado a ninguna liga.'
 		};
 	}
 
 	return {
-		tournaments: await listTournaments(),
-		selectedTournament: active,
-		matches: await listMatches(active.id),
-		predictions: await listPredictionsForUser(locals.user.id, active.id),
-		settings: await getTournamentSettings(active.id),
-		matchDetails: await getPlayerMatchDetails(locals.user.id, active.id)
+		ligas: await listLigas(source.id),
+		sourceTournament: source,
+		matches: await listMatches(source.id),
+		predictions: await listPredictionsForUser(locals.user.id, source.id),
+		settings: await getTournamentSettings(source.id),
+		matchDetails: await getPlayerMatchDetails(locals.user.id, source.id)
 	};
 };
 
@@ -55,7 +55,6 @@ export const actions: Actions = {
 		const matchId = String(data.get('matchId') ?? '');
 		const predA = Number(data.get('predA'));
 		const predB = Number(data.get('predB'));
-		const tournamentId = String(data.get('tournamentId') ?? '');
 		const predPenaltyWinnerRaw = String(data.get('predPenaltyWinner') ?? '');
 		const predPenaltyWinner: SideWinner =
 			predPenaltyWinnerRaw === 'A' || predPenaltyWinnerRaw === 'B' ? predPenaltyWinnerRaw : null;
@@ -64,10 +63,16 @@ export const actions: Actions = {
 			return fail(400, { message: 'Pronostico invalido.' });
 		}
 
+		// Get source tournament for saving prediction
+		const source = await getActiveTournament();
+		if (!source) {
+			return fail(400, { message: 'No hay competicion activa.' });
+		}
+
 		try {
 			await savePrediction({
 				userId: locals.user.id,
-				tournamentId,
+				tournamentId: source.id,
 				matchId,
 				predA,
 				predB,

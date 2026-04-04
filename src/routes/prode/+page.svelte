@@ -128,7 +128,6 @@
 
 		const fd = new FormData();
 		fd.set('matchId', matchId);
-		fd.set('tournamentId', data.selectedTournament?.id ?? '');
 		fd.set('predA', String(pred.predA));
 		fd.set('predB', String(pred.predB));
 		fd.set('predPenaltyWinner', pred.predPenaltyWinner ?? '');
@@ -180,7 +179,7 @@
 			<div class="flex-1">
 				<h1 class="text-3xl font-black tracking-tight">Mi Prode</h1>
 				<p class="text-sm text-white/60">
-					{data.selectedTournament?.name ?? 'Sin torneo'} · Completá tus pronósticos
+					{data.sourceTournament?.name ?? 'Sin competición'} · Completá tus pronósticos
 				</p>
 			</div>
 			{#if data.settings}
@@ -205,10 +204,10 @@
 		</div>
 
 		<!-- Share link -->
-		{#if data.selectedTournament && data.user}
+		{#if data.sourceTournament && data.user}
 			<div class="mt-4">
 				<a
-					href="/{data.selectedTournament.alias}/prode/{data.user.nickname}"
+					href="/{data.sourceTournament.alias}/prode/{data.user.nickname}"
 					class="inline-flex items-center gap-2 rounded-lg bg-white/10 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition-colors hover:bg-white/20"
 				>
 					📤 Compartir mi prode

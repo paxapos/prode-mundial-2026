@@ -46,6 +46,7 @@ export interface Tournament {
 	startAt: string;
 	lockReason: string | null;
 	scoringConfig: ScoringConfig;
+	parentTournamentId: string | null;
 	createdAt: string;
 }
 

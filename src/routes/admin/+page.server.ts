@@ -4,12 +4,14 @@ import type { SideWinner } from '$lib/types';
 import {
 	addMatch,
 	assignUserToTournament,
+	createLiga,
 	createTournament,
 	createUserByAdmin,
 	getActiveTournament,
 	getTournamentByAlias,
 	getScoringRules,
 	getTournamentSettings,
+	listLigas,
 	listUsers,
 	listMatches,
 	listTournaments,
@@ -25,12 +27,13 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const alias = url.searchParams.get('t');
 	const selectedTournament = alias ? await getTournamentByAlias(alias) : await getActiveTournament();
 	if (!selectedTournament) {
-		return { selectedTournament: null, tournaments: [], matches: [], users: [], rules: null, settings: null };
+		return { selectedTournament: null, tournaments: [], ligas: [], matches: [], users: [], rules: null, settings: null };
 	}
 
 	return {
 		selectedTournament,
 		tournaments: await listTournaments(),
+		ligas: await listLigas(selectedTournament.id),
 		matches: await listMatches(selectedTournament.id),
 		users: await listUsers(),
 		rules: await getScoringRules(selectedTournament.id),
@@ -172,6 +175,25 @@ export const actions: Actions = {
 			return { ok: true };
 		} catch (err) {
 			return fail(400, { message: err instanceof Error ? err.message : 'No se pudo crear partido.' });
+		}
+	},
+	createLiga: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') throw error(403, 'Solo administradores.');
+		const data = await request.formData();
+		const name = String(data.get('name') ?? '');
+		const alias = String(data.get('alias') ?? '');
+		const parentTournamentId = String(data.get('parentTournamentId') ?? '');
+
+		try {
+			await createLiga({
+				name,
+				alias: alias || undefined,
+				parentTournamentId,
+				actorUserId: locals.user.id
+			});
+			return { ok: true };
+		} catch (err) {
+			return fail(400, { message: err instanceof Error ? err.message : 'No se pudo crear liga.' });
 		}
 	}
 };

@@ -77,67 +77,28 @@
 				<img src="/mundial_2026.png" alt="FIFA World Cup 2026" class="h-20 w-auto drop-shadow-lg md:h-28" />
 				<div>
 					<h1 class="text-4xl font-black tracking-tight md:text-5xl">{data.tournament.name}</h1>
-					<p class="mt-2 text-sm text-white/70">Fixture completo · Grupos · Llaves · Tabla de posiciones</p>
+					<p class="mt-2 text-sm text-white/70">Fixture completo · Grupos · Llaves</p>
 				</div>
 			</div>
 		</div>
 	{/if}
 
-	<!-- Leaderboard -->
+	<!-- Quick links for logged-in users -->
 	{#if data.user}
-	<div>
-		<h2 class="mb-4 text-2xl font-black tracking-tight text-slate-900">Tabla de Posiciones</h2>
-		{#if data.leaderboard.length === 0}
-			<div class="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
-				<img src="/copacup.svg" alt="Copa" class="mx-auto mb-3 h-16 w-16 opacity-30" />
-				<p class="text-sm text-slate-400">No hay participantes todavía.</p>
-			</div>
-		{:else}
-			<div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-				<table class="w-full text-sm">
-					<thead>
-						<tr class="border-b border-slate-100 bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
-							<th class="w-14 py-3 text-center">#</th>
-							<th class="py-3 pl-4 text-left">Jugador</th>
-							<th class="w-20 py-3 text-center">Pts</th>
-							<th class="w-20 py-3 text-center">R. Exactos</th>
-							<th class="w-20 py-3 text-center">Resultados</th>
-						</tr>
-					</thead>
-					<tbody class="divide-y divide-slate-50">
-						{#each data.leaderboard as row, index}
-							{@const pos = index + 1}
-							<tr class={pos <= 3 ? 'bg-amber-50/40' : ''}>
-								<td class="py-3 text-center">
-									{#if pos === 1}
-										<span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-amber-400 text-xs font-black text-white shadow-sm">1</span>
-									{:else if pos === 2}
-										<span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-400 text-xs font-black text-white shadow-sm">2</span>
-									{:else if pos === 3}
-										<span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-amber-700 text-xs font-black text-white shadow-sm">3</span>
-									{:else}
-										<span class="text-sm font-semibold text-slate-400">{pos}</span>
-									{/if}
-								</td>
-								<td class="py-3 pl-4">
-									<span class="font-semibold text-slate-800">{row.nickname}</span>
-								</td>
-								<td class="py-3 text-center">
-									<span class="inline-flex min-w-[2rem] items-center justify-center rounded-lg bg-emerald-100 px-2 py-0.5 text-sm font-black text-emerald-700">{row.totalPoints}</span>
-								</td>
-								<td class="py-3 text-center text-slate-600">{row.exactHits}</td>
-								<td class="py-3 text-center text-slate-600">{row.outcomeHits}</td>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
-		{/if}
-	</div>
+		<div class="flex flex-wrap gap-3">
+			<a href="/prode" class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50">
+				⚽ Mi Prode
+			</a>
+			{#each data.ligas as liga}
+				<a href={`/${liga.alias}`} class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50">
+					🏆 {liga.name}
+				</a>
+			{/each}
+		</div>
 	{:else}
 		<div class="rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-sm">
 			<img src="/copacup.svg" alt="Copa" class="mx-auto mb-3 h-12 w-12 opacity-40" />
-			<p class="text-sm text-slate-500">Iniciá sesión para ver la tabla de posiciones y cargar tus pronósticos.</p>
+			<p class="text-sm text-slate-500">Iniciá sesión para ver tus ligas, la tabla de posiciones y cargar tus pronósticos.</p>
 			<a href="/login" class="mt-3 inline-block rounded-lg bg-blue-600 px-6 py-2 text-sm font-bold text-white hover:bg-blue-700">Ingresar</a>
 		</div>
 	{/if}
@@ -268,7 +229,7 @@
 	<!-- BRACKET TAB -->
 	{#if activeTab === 'bracket'}
 	<div bind:this={bracketSection}>
-		<h2 class="mb-4 text-2xl font-black tracking-tight text-slate-900">🏆 Llaves del Torneo</h2>
+		<h2 class="mb-4 text-2xl font-black tracking-tight text-slate-900">🏆 Llaves del Mundial</h2>
 		<p class="mb-4 text-sm text-slate-500">
 			Navegá con el dedo o mouse. Pinch o scroll para hacer zoom. Los partidos más cercanos están al frente, la final al fondo con niebla.
 		</p>

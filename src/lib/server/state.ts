@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, isNull, isNotNull } from 'drizzle-orm';
 import type {
 	GroupStandingRow,
 	LeaderboardEntry,
@@ -83,6 +83,7 @@ function toTournament(row: typeof tournaments.$inferSelect): Tournament {
 		startAt: row.startAt,
 		lockReason: row.lockReason,
 		scoringConfig: parseScoringConfig(row.scoringConfigJson),
+		parentTournamentId: row.parentTournamentId ?? null,
 		createdAt: row.createdAt
 	};
 }
@@ -283,9 +284,72 @@ export async function getTournamentByAlias(alias: string): Promise<Tournament | 
 }
 
 export async function getActiveTournament(): Promise<Tournament | null> {
-	const all = await listTournaments();
-	if (all.length === 0) return null;
-	return all[all.length - 1] ?? null;
+	await ensureDatabaseReady();
+	const rows = await db.select().from(tournaments).where(isNull(tournaments.parentTournamentId)).orderBy(asc(tournaments.createdAt));
+	if (rows.length === 0) return null;
+	// Return the first root tournament (the competition, e.g. Mundial 2026)
+	return toTournament(rows[0]);
+}
+
+/** List only ligas (child tournaments that share a parent's matches) */
+export async function listLigas(parentId?: string): Promise<Tournament[]> {
+	await ensureDatabaseReady();
+	const condition = parentId
+		? eq(tournaments.parentTournamentId, parentId)
+		: isNotNull(tournaments.parentTournamentId);
+	const rows = await db.select().from(tournaments).where(condition).orderBy(asc(tournaments.createdAt));
+	return rows.map(toTournament);
+}
+
+/** Create a liga (pool) as a child of the source tournament */
+export async function createLiga(input: {
+	name: string;
+	alias?: string;
+	parentTournamentId: string;
+	actorUserId?: string;
+}): Promise<Tournament> {
+	await ensureDatabaseReady();
+	const name = input.name.trim();
+	if (name.length < 3) throw new Error('La liga debe tener al menos 3 caracteres.');
+	const alias = slugifyAlias(input.alias?.trim() || name);
+	if (!alias) throw new Error('Alias de liga invalido.');
+
+	const [parent] = await db.select().from(tournaments).where(eq(tournaments.id, input.parentTournamentId)).limit(1);
+	if (!parent) throw new Error('Competicion padre inexistente.');
+
+	const [exists] = await db.select().from(tournaments).where(eq(tournaments.alias, alias)).limit(1);
+	if (exists) throw new Error('El alias ya existe.');
+
+	const [created] = await db
+		.insert(tournaments)
+		.values({
+			id: randomUUID(),
+			alias,
+			name,
+			headerImageUrl: generateTournamentHeaderImage(name),
+			state: parent.state,
+			startAt: parent.startAt,
+			lockReason: null,
+			scoringConfigJson: parent.scoringConfigJson,
+			parentTournamentId: input.parentTournamentId,
+			createdAt: new Date().toISOString()
+		})
+		.returning();
+
+	await createAuditLog({
+		userId: input.actorUserId ? Number(input.actorUserId) : null,
+		action: 'liga_created',
+		entityType: 'tournament',
+		entityId: created.id,
+		payload: { alias, name, parentTournamentId: input.parentTournamentId }
+	});
+
+	return toTournament(created);
+}
+
+/** Get the source tournament ID (root) for a given tournament/liga */
+function getSourceId(tournament: Tournament): string {
+	return tournament.parentTournamentId ?? tournament.id;
 }
 
 export async function createTournament(input: {
@@ -355,6 +419,23 @@ export async function assignUserToTournament(input: { userId: string; tournament
 		entityId: input.tournamentId,
 		payload: { userId: input.userId }
 	});
+
+	// If this is a liga (has parent), also ensure user is enrolled in the source tournament
+	const tournament = await getTournamentById(input.tournamentId);
+	if (tournament?.parentTournamentId) {
+		const [sourceExists] = await db
+			.select()
+			.from(userTournaments)
+			.where(and(eq(userTournaments.userId, Number(input.userId)), eq(userTournaments.tournamentId, tournament.parentTournamentId)))
+			.limit(1);
+		if (!sourceExists) {
+			await db.insert(userTournaments).values({
+				userId: Number(input.userId),
+				tournamentId: tournament.parentTournamentId,
+				createdAt: new Date().toISOString()
+			});
+		}
+	}
 }
 
 export async function listUserTournamentIds(userId: string): Promise<string[]> {
@@ -371,20 +452,26 @@ async function isTournamentLocked(tournament: Tournament): Promise<boolean> {
 
 export async function listMatches(tournamentId: string): Promise<Match[]> {
 	await ensureDatabaseReady();
+	// If this is a liga (has parent), get matches from the parent (source)
+	const tournament = await getTournamentById(tournamentId);
+	const sourceId = tournament ? getSourceId(tournament) : tournamentId;
 	const rows = await db
 		.select()
 		.from(tournamentMatches)
-		.where(eq(tournamentMatches.tournamentId, tournamentId))
+		.where(eq(tournamentMatches.tournamentId, sourceId))
 		.orderBy(asc(tournamentMatches.kickoffAt));
 	return rows.map(toMatch);
 }
 
 export async function listPredictionsForUser(userId: string, tournamentId: string): Promise<Prediction[]> {
 	await ensureDatabaseReady();
+	// Predictions are always stored against the source tournament
+	const tournament = await getTournamentById(tournamentId);
+	const sourceId = tournament ? getSourceId(tournament) : tournamentId;
 	const rows = await db
 		.select()
 		.from(tournamentPredictions)
-		.where(and(eq(tournamentPredictions.userId, Number(userId)), eq(tournamentPredictions.tournamentId, tournamentId)));
+		.where(and(eq(tournamentPredictions.userId, Number(userId)), eq(tournamentPredictions.tournamentId, sourceId)));
 	return rows.map(toPrediction);
 }
 
@@ -398,14 +485,19 @@ export async function savePrediction(input: {
 }): Promise<Prediction> {
 	await ensureDatabaseReady();
 	const tournament = await getTournamentById(input.tournamentId);
-	if (!tournament) throw new Error('Torneo inexistente.');
-	if (await isTournamentLocked(tournament)) throw new Error('El torneo esta bloqueado.');
+	if (!tournament) throw new Error('Liga inexistente.');
+	const sourceId = getSourceId(tournament);
+	const sourceTournament = tournament.parentTournamentId ? await getTournamentById(sourceId) : tournament;
+	if (!sourceTournament) throw new Error('Competicion inexistente.');
+	if (await isTournamentLocked(sourceTournament)) throw new Error('La competicion esta bloqueada.');
 
+	// Check user is enrolled in source or any liga
 	const memberships = await listUserTournamentIds(input.userId);
-	if (!memberships.includes(input.tournamentId)) throw new Error('No estas asignado a este torneo.');
+	const hasAccess = memberships.includes(sourceId) || memberships.includes(input.tournamentId);
+	if (!hasAccess) throw new Error('No estas asignado a ninguna liga.');
 
 	const [match] = await db.select().from(tournamentMatches).where(eq(tournamentMatches.id, input.matchId)).limit(1);
-	if (!match || match.tournamentId !== input.tournamentId) throw new Error('Partido inexistente.');
+	if (!match || match.tournamentId !== sourceId) throw new Error('Partido inexistente.');
 	if (Date.now() >= new Date(match.kickoffAt).getTime()) throw new Error('Este partido ya comenzo y no admite cambios.');
 	if (input.predA < 0 || input.predB < 0) throw new Error('Los goles no pueden ser negativos.');
 
@@ -415,7 +507,7 @@ export async function savePrediction(input: {
 		.where(
 			and(
 				eq(tournamentPredictions.userId, Number(input.userId)),
-				eq(tournamentPredictions.tournamentId, input.tournamentId),
+				eq(tournamentPredictions.tournamentId, sourceId),
 				eq(tournamentPredictions.matchId, input.matchId)
 			)
 		)
@@ -435,7 +527,7 @@ export async function savePrediction(input: {
 		.insert(tournamentPredictions)
 		.values({
 			userId: Number(input.userId),
-			tournamentId: input.tournamentId,
+			tournamentId: sourceId,
 			matchId: input.matchId,
 			predA: input.predA,
 			predB: input.predB,
@@ -484,8 +576,10 @@ async function getTournamentById(tournamentId: string): Promise<Tournament | nul
 
 export async function getScoringRules(tournamentId: string): Promise<ScoringRules> {
 	const tournament = await getTournamentById(tournamentId);
-	if (!tournament) throw new Error('Torneo inexistente.');
-	return tournament.scoringConfig;
+	if (!tournament) throw new Error('Liga inexistente.');
+	const source = tournament.parentTournamentId ? await getTournamentById(tournament.parentTournamentId) : tournament;
+	if (!source) throw new Error('Competicion inexistente.');
+	return source.scoringConfig;
 }
 
 export async function updateScoringRules(input: {
@@ -500,7 +594,7 @@ export async function updateScoringRules(input: {
 		.set({ scoringConfigJson: serializeScoringConfig(input.scoringConfig) })
 		.where(eq(tournaments.id, input.tournamentId))
 		.returning();
-	if (!updated) throw new Error('Torneo inexistente.');
+	if (!updated) throw new Error('Competicion inexistente.');
 
 	await createAuditLog({
 		userId: input.actorUserId ? Number(input.actorUserId) : null,
@@ -515,12 +609,15 @@ export async function updateScoringRules(input: {
 
 export async function getTournamentSettings(tournamentId: string): Promise<TournamentSettings> {
 	const tournament = await getTournamentById(tournamentId);
-	if (!tournament) throw new Error('Torneo inexistente.');
-	const lockedByDate = tournament.state === 'open_predictions' && Date.now() >= new Date(tournament.startAt).getTime();
+	if (!tournament) throw new Error('Liga inexistente.');
+	// For ligas, settings come from the source (parent) tournament
+	const source = tournament.parentTournamentId ? await getTournamentById(tournament.parentTournamentId) : tournament;
+	if (!source) throw new Error('Competicion inexistente.');
+	const lockedByDate = source.state === 'open_predictions' && Date.now() >= new Date(source.startAt).getTime();
 	return {
-		state: lockedByDate ? 'locked' : tournament.state,
-		tournamentStartAt: tournament.startAt,
-		lockReason: tournament.lockReason
+		state: lockedByDate ? 'locked' : source.state,
+		tournamentStartAt: source.startAt,
+		lockReason: source.lockReason
 	};
 }
 
@@ -531,7 +628,7 @@ export async function lockTournament(tournamentId: string, reason: string, actor
 		.set({ state: 'locked', lockReason: reason || 'Bloqueo manual por administracion.' })
 		.where(eq(tournaments.id, tournamentId))
 		.returning();
-	if (!updated) throw new Error('Torneo inexistente.');
+	if (!updated) throw new Error('Competicion inexistente.');
 
 	await createAuditLog({
 		userId: actorUserId ? Number(actorUserId) : null,
@@ -546,19 +643,26 @@ export async function lockTournament(tournamentId: string, reason: string, actor
 
 export async function getLeaderboard(tournamentId: string): Promise<LeaderboardEntry[]> {
 	await ensureDatabaseReady();
-	const [memberships, allUsers, predictionRows, matchRows, tournament] = await Promise.all([
+	const tournament = await getTournamentById(tournamentId);
+	if (!tournament) throw new Error('Liga inexistente.');
+	const sourceId = getSourceId(tournament);
+
+	const [memberships, allUsers, predictionRows, matchRows, sourceTournament] = await Promise.all([
+		// Users enrolled in THIS liga/tournament
 		db.select().from(userTournaments).where(eq(userTournaments.tournamentId, tournamentId)),
 		listUsers(),
-		db.select().from(tournamentPredictions).where(eq(tournamentPredictions.tournamentId, tournamentId)),
-		db.select().from(tournamentMatches).where(eq(tournamentMatches.tournamentId, tournamentId)),
-		getTournamentById(tournamentId)
+		// Predictions from the SOURCE tournament
+		db.select().from(tournamentPredictions).where(eq(tournamentPredictions.tournamentId, sourceId)),
+		// Matches from the SOURCE tournament
+		db.select().from(tournamentMatches).where(eq(tournamentMatches.tournamentId, sourceId)),
+		tournament.parentTournamentId ? getTournamentById(sourceId) : Promise.resolve(tournament)
 	]);
-	if (!tournament) throw new Error('Torneo inexistente.');
+	if (!sourceTournament) throw new Error('Competicion inexistente.');
 
 	const userIds = new Set(memberships.map((m) => String(m.userId)));
 	const usersInTournament = allUsers.filter((u) => userIds.has(u.id));
 	const matchMap = new Map(matchRows.map((row) => [row.id, toMatch(row)]));
-	const config = tournament.scoringConfig;
+	const config = sourceTournament.scoringConfig;
 
 	const board = usersInTournament.map((user) => {
 		let totalPoints = 0;
@@ -602,15 +706,18 @@ export async function getLeaderboard(tournamentId: string): Promise<LeaderboardE
 /** Get per-match point breakdown for a specific user */
 export async function getPlayerMatchDetails(userId: string, tournamentId: string): Promise<MatchPointDetail[]> {
 	await ensureDatabaseReady();
-	const [tournament, predRows, matchRows] = await Promise.all([
-		getTournamentById(tournamentId),
-		db.select().from(tournamentPredictions).where(
-			and(eq(tournamentPredictions.userId, Number(userId)), eq(tournamentPredictions.tournamentId, tournamentId))
-		),
-		db.select().from(tournamentMatches).where(eq(tournamentMatches.tournamentId, tournamentId))
-	]);
+	const tournament = await getTournamentById(tournamentId);
 	if (!tournament) return [];
-	const config = tournament.scoringConfig;
+	const sourceId = getSourceId(tournament);
+	const sourceTournament = tournament.parentTournamentId ? await getTournamentById(sourceId) : tournament;
+	if (!sourceTournament) return [];
+	const [predRows, matchRows] = await Promise.all([
+		db.select().from(tournamentPredictions).where(
+			and(eq(tournamentPredictions.userId, Number(userId)), eq(tournamentPredictions.tournamentId, sourceId))
+		),
+		db.select().from(tournamentMatches).where(eq(tournamentMatches.tournamentId, sourceId))
+	]);
+	const config = sourceTournament.scoringConfig;
 	const matchMap = new Map(matchRows.map((row) => [row.id, toMatch(row)]));
 	const details: MatchPointDetail[] = [];
 
@@ -791,7 +898,6 @@ export async function buildLandingData() {
 	if (!tournament) {
 		return {
 			tournament: null,
-			leaderboard: [],
 			matches: [],
 			groups: {},
 			groupMatches: [],
@@ -799,15 +905,13 @@ export async function buildLandingData() {
 		};
 	}
 
-	const [leaderboard, matches, groups] = await Promise.all([
-		getLeaderboard(tournament.id),
+	const [matches, groups] = await Promise.all([
 		listMatches(tournament.id),
 		buildGroupStandings(tournament.id)
 	]);
 
 	return {
 		tournament,
-		leaderboard,
 		matches,
 		groups,
 		groupMatches: matches.filter((m) => m.stage === 'groups'),

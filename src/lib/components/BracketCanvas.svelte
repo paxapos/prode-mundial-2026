@@ -508,38 +508,57 @@
 	}
 
 	// ── Interaction ──
+	let pointerId: number | null = null;
+
 	function onWheel(e: WheelEvent) {
 		e.preventDefault();
 		targetZoomT = Math.max(0, Math.min(1, targetZoomT + e.deltaY * 0.0008));
 	}
-	function onPointerDown(e: PointerEvent) { isDragging = true; lastPointer = { x: e.clientX, y: e.clientY }; container.style.cursor = 'grabbing'; }
+	function onPointerDown(e: PointerEvent) {
+		// Ignore if a pinch is happening
+		if (e.pointerType === 'touch' && pointerId !== null) return;
+		isDragging = true;
+		pointerId = e.pointerId;
+		lastPointer = { x: e.clientX, y: e.clientY };
+		container.style.cursor = 'grabbing';
+		try { container.setPointerCapture(e.pointerId); } catch { /* */ }
+	}
 	function onPointerMove(e: PointerEvent) {
-		if (!isDragging) return;
+		if (!isDragging || e.pointerId !== pointerId) return;
 		const dx = e.clientX - lastPointer.x, dy = e.clientY - lastPointer.y;
 		lastPointer = { x: e.clientX, y: e.clientY };
-		targetPanX -= dx * 2.5; targetPanY += dy * 2.5;
+		targetPanX -= dx * 1.8; targetPanY += dy * 1.8;
 	}
-	function onPointerUp() { isDragging = false; container.style.cursor = 'grab'; }
+	function onPointerUp(e: PointerEvent) {
+		if (e.pointerId !== pointerId) return;
+		isDragging = false;
+		pointerId = null;
+		container.style.cursor = 'grab';
+		try { container.releasePointerCapture(e.pointerId); } catch { /* */ }
+	}
 	function onTouchStart(e: TouchEvent) {
 		if (e.touches.length === 2) {
 			e.preventDefault();
+			isDragging = false; // cancel drag during pinch
+			pointerId = null;
 			const dx = e.touches[0].clientX - e.touches[1].clientX, dy = e.touches[0].clientY - e.touches[1].clientY;
 			pinchStartDist = Math.sqrt(dx * dx + dy * dy); pinchStartZoomT = targetZoomT;
-		} else if (e.touches.length === 1) { isDragging = true; lastPointer = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }
+		}
 	}
 	function onTouchMove(e: TouchEvent) {
 		if (e.touches.length === 2) {
 			e.preventDefault();
 			const dx = e.touches[0].clientX - e.touches[1].clientX, dy = e.touches[0].clientY - e.touches[1].clientY;
 			const dist = Math.sqrt(dx * dx + dy * dy);
-			targetZoomT = Math.max(0, Math.min(1, pinchStartZoomT + (dist - pinchStartDist) / 400));
-		} else if (e.touches.length === 1 && isDragging) {
-			const dx = e.touches[0].clientX - lastPointer.x, dy = e.touches[0].clientY - lastPointer.y;
-			lastPointer = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-			targetPanX -= dx * 2.5; targetPanY += dy * 2.5;
+			const delta = (dist - pinchStartDist) / 500;
+			targetZoomT = Math.max(0, Math.min(1, pinchStartZoomT + delta));
 		}
 	}
-	function onTouchEnd(e: TouchEvent) { if (e.touches.length < 2) isDragging = false; }
+	function onTouchEnd(e: TouchEvent) {
+		if (e.touches.length < 2) {
+			// pinch ended, allow single-finger drag again
+		}
+	}
 	function onResize() {
 		if (!renderer || !container || !camera) return;
 		const w = container.clientWidth, h = container.clientHeight;

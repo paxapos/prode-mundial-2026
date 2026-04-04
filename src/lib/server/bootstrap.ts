@@ -319,6 +319,7 @@ async function createTables(): Promise<void> {
 			start_at TEXT NOT NULL,
 			lock_reason TEXT,
 			scoring_config_json TEXT NOT NULL,
+			parent_tournament_id TEXT,
 			created_at TEXT NOT NULL
 		);
 	`);
@@ -405,7 +406,8 @@ async function normalizeSchema(): Promise<void> {
 			definition: "scoring_config_json TEXT NOT NULL DEFAULT '{}'",
 			backfillSql: `UPDATE tournaments SET scoring_config_json = '${escapedScoringConfigDefault}' WHERE scoring_config_json IS NULL OR scoring_config_json = '{}' OR scoring_config_json = '';`
 		},
-		{ name: 'created_at', definition: "created_at TEXT NOT NULL DEFAULT ''" }
+		{ name: 'created_at', definition: "created_at TEXT NOT NULL DEFAULT ''" },
+		{ name: 'parent_tournament_id', definition: 'parent_tournament_id TEXT' }
 	]);
 
 	await ensureColumns('tournament_matches', [

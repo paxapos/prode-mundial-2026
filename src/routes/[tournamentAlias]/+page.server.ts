@@ -4,7 +4,7 @@ import { getLeaderboard, getTournamentByAlias } from '$lib/server/state';
 
 export const load: PageServerLoad = async ({ params }) => {
 	const tournament = await getTournamentByAlias(params.tournamentAlias);
-	if (!tournament) throw error(404, 'Torneo no encontrado.');
+	if (!tournament) throw error(404, 'Liga no encontrada.');
 
 	return {
 		tournament,

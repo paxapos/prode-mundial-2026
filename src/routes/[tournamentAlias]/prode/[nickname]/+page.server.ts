@@ -14,14 +14,16 @@ import {
 
 export const load: PageServerLoad = async ({ params, locals, url }) => {
 	const tournament = await getTournamentByAlias(params.tournamentAlias);
-	if (!tournament) throw error(404, 'Torneo no encontrado.');
+	if (!tournament) throw error(404, 'Liga no encontrada.');
 
 	const profileUser = await getUserByNickname(params.nickname);
 	if (!profileUser) throw error(404, 'Usuario no encontrado.');
 
 	const userTournamentIds = await listUserTournamentIds(profileUser.id);
-	if (!userTournamentIds.includes(tournament.id)) {
-		throw error(404, 'Este usuario no participa en este torneo.');
+	// Check enrollment in this specific liga OR the source tournament
+	const sourceId = tournament.parentTournamentId ?? tournament.id;
+	if (!userTournamentIds.includes(tournament.id) && !userTournamentIds.includes(sourceId)) {
+		throw error(404, 'Este usuario no participa en esta liga.');
 	}
 
 	const currentUser = locals.user;
@@ -49,7 +51,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 export const actions: Actions = {
 	save: async ({ request, locals, params }) => {
 		const tournament = await getTournamentByAlias(params.tournamentAlias);
-		if (!tournament) throw error(404, 'Torneo no encontrado.');
+		if (!tournament) throw error(404, 'Liga no encontrada.');
 
 		const profileUser = await getUserByNickname(params.nickname);
 		if (!profileUser) throw error(404, 'Usuario no encontrado.');

@@ -315,7 +315,7 @@
 									{match.isClosed ? '✏️ Editar resultado' : '📝 Cargar resultado'}
 								</summary>
 								<div class="border-t border-slate-100 p-3">
-									<form method="POST" action="?/saveResult" class="space-y-3">
+											<form method="POST" action="?/saveResult" use:enhance class="space-y-3">
 										<input type="hidden" name="tournamentId" value={data.selectedTournament?.id} />
 										<input type="hidden" name="matchId" value={match.id} />
 										<div class="grid grid-cols-2 gap-3">
@@ -366,7 +366,7 @@
 										🔄 Editar equipos (llave)
 									</summary>
 									<div class="border-t border-slate-100 p-3">
-										<form method="POST" action="?/updateMatch" class="flex flex-wrap items-end gap-2">
+												<form method="POST" action="?/updateMatch" use:enhance class="flex flex-wrap items-end gap-2">
 											<input type="hidden" name="tournamentId" value={data.selectedTournament?.id} />
 											<input type="hidden" name="matchId" value={match.id} />
 											<div class="flex-1">
@@ -390,47 +390,78 @@
 	{/if}
 
 	<!-- ═══════════════════════════════════════════════════ -->
-	<!-- TAB: TORNEOS                                       -->
+	<!-- TAB: LIGAS                                         -->
 	<!-- ═══════════════════════════════════════════════════ -->
 	{#if activeTab === 'torneos'}
-		<!-- Tournament selector -->
-		<div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-			<h2 class="mb-4 text-lg font-black text-slate-800">Competiciones</h2>
-			<div class="flex flex-wrap gap-2">
-				{#each data.tournaments as tournament}
-					<a
-						href={`/admin?t=${tournament.alias}`}
-						class="group flex items-center gap-2 rounded-xl border-2 px-4 py-2.5 text-sm font-semibold transition-all
-						{data.selectedTournament?.id === tournament.id
-							? 'border-sky-400 bg-sky-50 text-sky-700 shadow-sm'
-							: 'border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'}"
-					>
-						<span class="text-base">{tournament.parentTournamentId ? '🏅' : '🏆'}</span>
-						{tournament.name}
-						{#if tournament.parentTournamentId}
-							<span class="rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-600">LIGA</span>
-						{/if}
-					</a>
-				{/each}
-			</div>
-		</div>
+		{@const isLiga = !!data.selectedTournament?.parentTournamentId}
 
-		<!-- Create Liga -->
-		{#if data.selectedTournament && !data.selectedTournament.parentTournamentId}
-			<div class="rounded-xl border border-emerald-200 bg-emerald-50/50 p-5 shadow-sm">
+		<!-- Breadcrumb when viewing a liga -->
+		{#if isLiga && data.parentTournament}
+			<div class="flex items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm">
+				<a href="/admin" class="font-semibold text-sky-700 hover:underline">🏆 {data.parentTournament.name}</a>
+				<span class="text-sky-300">›</span>
+				<span class="font-bold text-slate-800">🏅 {data.selectedTournament?.name}</span>
+			</div>
+		{/if}
+
+		<!-- Competition & Liga selector -->
+		{#if !isLiga}
+			{@const competitions = data.tournaments.filter(t => !t.parentTournamentId)}
+			{@const ligas = data.tournaments.filter(t => !!t.parentTournamentId)}
+			<div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+				<h2 class="mb-3 text-lg font-black text-slate-800">Competiciones y Ligas</h2>
+				<div class="space-y-3">
+					<div class="flex flex-wrap gap-2">
+						{#each competitions as tournament}
+							<a
+								href={`/admin?t=${tournament.alias}`}
+								class="flex items-center gap-2 rounded-xl border-2 px-4 py-2.5 text-sm font-semibold transition-all
+								{data.selectedTournament?.id === tournament.id
+									? 'border-sky-400 bg-sky-50 text-sky-700 shadow-sm'
+									: 'border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50'}"
+							>
+								<span>🏆</span> {tournament.name}
+							</a>
+						{/each}
+					</div>
+					{#if ligas.length > 0}
+						<div class="border-t border-slate-100 pt-3">
+							<p class="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">Ligas</p>
+							<div class="flex flex-wrap gap-2">
+								{#each ligas as liga}
+									<a
+										href={`/admin?t=${liga.alias}`}
+										class="flex items-center gap-2 rounded-xl border-2 px-3 py-2 text-sm font-semibold transition-all
+										{data.selectedTournament?.id === liga.id
+											? 'border-amber-400 bg-amber-50 text-amber-700 shadow-sm'
+											: 'border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50'}"
+									>
+										<span>🏅</span> {liga.name}
+									</a>
+								{/each}
+							</div>
+						</div>
+					{/if}
+				</div>
+			</div>
+		{/if}
+
+		<!-- ─── VIEWING A COMPETITION (root) ─── -->
+		{#if data.selectedTournament && !isLiga}
+			<!-- Create Liga -->
+			<div class="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-5 shadow-sm">
 				<h2 class="mb-1 text-lg font-black text-slate-800">Crear nueva Liga</h2>
-				<p class="mb-4 text-xs text-slate-500">Una liga es un grupo de amigos que compiten entre sí con sus pronósticos dentro de {data.selectedTournament.name}.</p>
-				<form method="POST" action="?/createLiga" class="space-y-4">
+				<p class="mb-4 text-xs text-slate-500">Una liga es un grupo de amigos que compiten entre sí dentro de <strong>{data.selectedTournament.name}</strong>.</p>
+				<form method="POST" action="?/createLiga" use:enhance class="space-y-4">
 					<input type="hidden" name="parentTournamentId" value={data.selectedTournament.id} />
-					<div class="grid gap-4 md:grid-cols-2">
-						<div>
+					<div class="grid gap-4 md:grid-cols-3">
+						<div class="md:col-span-2">
 							<span class="mb-1 block text-xs font-bold text-slate-500">Nombre de la liga</span>
-							<input name="name" required placeholder="Liga del Trabajo" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20" />
+							<input name="name" required placeholder="Ej: Liga del Trabajo" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20" />
 						</div>
 						<div>
 							<span class="mb-1 block text-xs font-bold text-slate-500">Alias URL (opcional)</span>
 							<input name="alias" placeholder="liga-trabajo" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20" />
-							<p class="mt-1 text-[10px] text-slate-400">Se genera del nombre si lo dejás vacío</p>
 						</div>
 					</div>
 					<button type="submit" class="rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700">
@@ -439,60 +470,51 @@
 				</form>
 			</div>
 
-			<!-- Existing ligas -->
+			<!-- Existing ligas with participant count -->
 			{#if data.ligas.length > 0}
 				<div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-					<h2 class="mb-4 text-lg font-black text-slate-800">Ligas creadas</h2>
-					<div class="space-y-2">
+					<h2 class="mb-4 text-lg font-black text-slate-800">Ligas de {data.selectedTournament.name}</h2>
+					<div class="grid gap-3 sm:grid-cols-2">
 						{#each data.ligas as liga}
-							<div class="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-4 py-3">
+							<div class="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-4 transition-shadow hover:shadow-md">
 								<div class="flex items-center gap-3">
-									<span class="text-lg">🏅</span>
+									<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 text-lg">🏅</div>
 									<div>
 										<p class="text-sm font-bold text-slate-800">{liga.name}</p>
 										<p class="text-xs text-slate-400">/{liga.alias}</p>
 									</div>
 								</div>
-							<div class="flex gap-2">
-								<a href={`/admin?t=${liga.alias}`} class="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-bold text-amber-700 hover:bg-amber-200">⚙️ Administrar</a>
-								<a href={`/${liga.alias}`} class="rounded-lg bg-sky-100 px-3 py-1.5 text-xs font-bold text-sky-700 hover:bg-sky-200">Ver tabla</a>
-							</div>
+								<div class="flex items-center gap-2">
+									<a href={`/admin?t=${liga.alias}`} class="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-bold text-amber-700 transition-colors hover:bg-amber-200">⚙️ Gestionar</a>
+									<a href={`/${liga.alias}`} class="rounded-lg bg-sky-100 px-3 py-1.5 text-xs font-bold text-sky-700 transition-colors hover:bg-sky-200">👁️ Ver</a>
+								</div>
 							</div>
 						{/each}
 					</div>
 				</div>
+			{:else}
+				<div class="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center">
+					<p class="text-3xl">🏅</p>
+					<p class="mt-2 text-sm font-medium text-slate-500">Aún no creaste ninguna liga.</p>
+					<p class="text-xs text-slate-400">Creá una liga arriba para empezar a inscribir jugadores.</p>
+				</div>
 			{/if}
-		{/if}
 
-		<!-- ─── Participantes del torneo seleccionado ─── -->
-		{#if data.selectedTournament && !data.selectedTournament.parentTournamentId}
-			<!-- Root competition: direct to manage per liga -->
-			<div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-				<h2 class="text-lg font-black text-slate-800">Participantes</h2>
-				<p class="mt-2 text-sm text-slate-500">Los participantes se gestionan por liga. Seleccioná una liga desde la sección de arriba para agregar o quitar jugadores.</p>
-				{#if data.ligas.length > 0}
-					<div class="mt-3 flex flex-wrap gap-2">
-						{#each data.ligas as liga}
-							<a href={`/admin?t=${liga.alias}`} class="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-bold text-amber-700 hover:bg-amber-200">⚙️ {liga.name}</a>
-						{/each}
-					</div>
-				{:else}
-					<p class="mt-2 text-xs text-slate-400">Aún no creaste ninguna liga. Creá una arriba para empezar a agregar jugadores.</p>
-				{/if}
-			</div>
-		{:else if data.selectedTournament}
+		<!-- ─── VIEWING A LIGA ─── -->
+		{:else if data.selectedTournament && isLiga}
+			<!-- Participants management -->
 			<div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
 				<div class="mb-4 flex items-center justify-between">
 					<div>
 						<h2 class="text-lg font-black text-slate-800">Participantes de {data.selectedTournament.name}</h2>
-						<p class="text-xs text-slate-400">Usuarios inscriptos en esta liga</p>
+						<p class="text-xs text-slate-400">Inscribí jugadores a esta liga para que compitan entre sí.</p>
 					</div>
-					<span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">{data.tournamentMembers.length} participantes</span>
+					<span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">{data.tournamentMembers.length}</span>
 				</div>
 
 				<!-- Add participant -->
 				{#if nonMembers.length > 0}
-					<form method="POST" action="?/addToTournament" class="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-dashed border-emerald-300 bg-emerald-50/50 p-3">
+					<form method="POST" action="?/addToTournament" use:enhance class="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-dashed border-emerald-300 bg-emerald-50/50 p-3">
 						<input type="hidden" name="tournamentId" value={data.selectedTournament.id} />
 						<div class="flex-1">
 							<span class="mb-1 block text-xs font-bold text-slate-500">Agregar participante</span>
@@ -507,7 +529,7 @@
 						</button>
 					</form>
 				{:else}
-					<p class="mb-4 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-400">Todos los usuarios ya están inscriptos.</p>
+					<p class="mb-4 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-400">Todos los usuarios registrados ya están inscriptos en esta liga.</p>
 				{/if}
 
 				<!-- Members list -->
@@ -518,8 +540,7 @@
 								<tr class="border-b border-slate-100 bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
 									<th class="py-2.5 pl-4 text-left">Participante</th>
 									<th class="py-2.5 text-left">Email</th>
-									<th class="py-2.5 text-center">Rol</th>
-									<th class="py-2.5 pr-4 text-center">Acciones</th>
+									<th class="py-2.5 pr-4 text-right">Acciones</th>
 								</tr>
 							</thead>
 							<tbody class="divide-y divide-slate-50">
@@ -531,17 +552,14 @@
 													{member.nickname.charAt(0).toUpperCase()}
 												</span>
 												<span class="font-semibold text-slate-800">{member.nickname}</span>
+												{#if member.role === 'admin'}
+													<span class="rounded-full bg-red-100 px-1.5 py-0.5 text-[9px] font-bold text-red-600">ADMIN</span>
+												{/if}
 											</div>
 										</td>
 										<td class="py-2.5 text-slate-500">{member.email}</td>
-										<td class="py-2.5 text-center">
-											<span class="inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase
-												{member.role === 'admin' ? 'bg-red-100 text-red-700' : 'bg-sky-100 text-sky-700'}">
-												{member.role === 'admin' ? '👑' : '🎮'} {member.role}
-											</span>
-										</td>
-										<td class="py-2.5 pr-4 text-center">
-											<form method="POST" action="?/removeFromTournament" class="inline">
+										<td class="py-2.5 pr-4 text-right">
+											<form method="POST" action="?/removeFromTournament" use:enhance class="inline">
 												<input type="hidden" name="userId" value={member.id} />
 												<input type="hidden" name="tournamentId" value={data.selectedTournament?.id} />
 												<button type="submit" class="rounded-lg bg-red-50 px-3 py-1 text-xs font-bold text-red-600 hover:bg-red-100">
@@ -555,114 +573,146 @@
 						</table>
 					</div>
 				{:else}
-					<p class="text-center text-sm text-slate-400 py-4">No hay participantes inscriptos aún.</p>
+					<div class="rounded-lg border border-dashed border-slate-200 py-6 text-center">
+						<p class="text-sm text-slate-400">No hay participantes aún. Agregá jugadores usando el formulario de arriba.</p>
+					</div>
 				{/if}
 			</div>
+
+			<!-- Sibling ligas quick nav -->
+			{#if data.ligas.length > 1}
+				<div class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+					<p class="mb-2 text-xs font-bold uppercase tracking-wider text-slate-400">Otras ligas</p>
+					<div class="flex flex-wrap gap-2">
+						{#each data.ligas.filter(l => l.id !== data.selectedTournament?.id) as liga}
+							<a href={`/admin?t=${liga.alias}`} class="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200">
+								🏅 {liga.name}
+							</a>
+						{/each}
+					</div>
+				</div>
+			{/if}
 		{/if}
 
-		<!-- Create tournament (competition) -->
-		<div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-			<h2 class="mb-1 text-lg font-black text-slate-800">Crear nueva competición</h2>
-			<p class="mb-4 text-xs text-slate-400">Definí nombre, alias URL, fecha de inicio y reglas de puntuación.</p>
-			<form method="POST" action="?/createTournament" class="space-y-4">
-				<div class="grid gap-4 md:grid-cols-2">
-					<div>
-						<span class="mb-1 block text-xs font-bold text-slate-500">Nombre de la competición</span>
-						<input name="name" required placeholder="Copa del Barrio 2026" class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20" />
-					</div>
-					<div>
-						<span class="mb-1 block text-xs font-bold text-slate-500">Alias URL</span>
-						<input name="alias" placeholder="copa-barrio" class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20" />
-						<p class="mt-1 text-[10px] text-slate-400">Se genera automáticamente si lo dejás vacío</p>
-					</div>
-					<div>
-						<span class="mb-1 block text-xs font-bold text-slate-500">Imagen Header (opcional)</span>
-						<input name="headerImageUrl" placeholder="https://..." class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20" />
-					</div>
-					<div>
-						<span class="mb-1 block text-xs font-bold text-slate-500">Fecha de inicio</span>
-						<input name="startAt" type="datetime-local" required class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20" />
-					</div>
-				</div>
-				<div class="grid grid-cols-3 gap-3">
-					<!-- Points info note -->
-				</div>
-				<p class="text-xs text-slate-400">La puntuación se configura después de crear la competición, desde la pestaña Config.</p>
-				<button type="submit" class="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-emerald-700 md:w-auto md:px-8">
-					🏆 Crear competición
-				</button>
-			</form>
-		</div>
-
-		<!-- Add match -->
-		<div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-			<h2 class="mb-1 text-lg font-black text-slate-800">Agregar partido</h2>
-			<p class="mb-4 text-xs text-slate-400">Agregá partidos manualmente a la competición seleccionada.</p>
-			<form method="POST" action="?/addMatch" class="space-y-4">
-				<input type="hidden" name="tournamentId" value={data.selectedTournament?.id} />
-				<div class="grid gap-4 md:grid-cols-3">
-					<div>
-						<span class="mb-1 block text-xs font-bold text-slate-500">Fase</span>
-						<select name="stage" class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm">
-							<option value="groups">Grupos</option>
-							<option value="round32">Ronda de 32</option>
-							<option value="round16">Octavos</option>
-							<option value="quarterfinal">Cuartos</option>
-							<option value="semifinal">Semifinal</option>
-							<option value="final">Final</option>
-						</select>
-					</div>
-					<div>
-						<span class="mb-1 block text-xs font-bold text-slate-500">Grupo (opcional)</span>
-						<input name="groupCode" placeholder="A" class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm" />
-					</div>
-					<div>
-						<span class="mb-1 block text-xs font-bold text-slate-500">Fecha y hora</span>
-						<input name="kickoffAt" type="datetime-local" required class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm" />
-					</div>
-					<div>
-						<span class="mb-1 block text-xs font-bold text-slate-500">Equipo A</span>
-						<input name="teamA" required class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm" />
-					</div>
-					<div>
-						<span class="mb-1 block text-xs font-bold text-slate-500">Equipo B</span>
-						<input name="teamB" required class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm" />
-					</div>
-					<div class="flex items-end">
-						<button type="submit" class="w-full rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-slate-800">
-							➕ Agregar
+		<!-- Create tournament (only on root view) -->
+		{#if !isLiga}
+			<details class="rounded-xl border border-slate-200 bg-white shadow-sm">
+				<summary class="cursor-pointer px-5 py-4 text-sm font-bold text-slate-500 hover:text-slate-700">
+					➕ Crear nueva competición (avanzado)
+				</summary>
+				<div class="border-t border-slate-100 p-5">
+					<form method="POST" action="?/createTournament" use:enhance class="space-y-4">
+						<div class="grid gap-4 md:grid-cols-2">
+							<div>
+								<span class="mb-1 block text-xs font-bold text-slate-500">Nombre</span>
+								<input name="name" required placeholder="Copa del Barrio 2026" class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20" />
+							</div>
+							<div>
+								<span class="mb-1 block text-xs font-bold text-slate-500">Alias URL</span>
+								<input name="alias" placeholder="copa-barrio" class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20" />
+							</div>
+							<div>
+								<span class="mb-1 block text-xs font-bold text-slate-500">Imagen Header (opcional)</span>
+								<input name="headerImageUrl" placeholder="https://..." class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20" />
+							</div>
+							<div>
+								<span class="mb-1 block text-xs font-bold text-slate-500">Fecha de inicio</span>
+								<input name="startAt" type="datetime-local" required class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20" />
+							</div>
+						</div>
+						<button type="submit" class="rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-700">
+							🏆 Crear competición
 						</button>
-					</div>
+					</form>
 				</div>
-			</form>
-		</div>
+			</details>
+
+			<!-- Add match (collapse) -->
+			<details class="rounded-xl border border-slate-200 bg-white shadow-sm">
+				<summary class="cursor-pointer px-5 py-4 text-sm font-bold text-slate-500 hover:text-slate-700">
+					➕ Agregar partido manualmente
+				</summary>
+				<div class="border-t border-slate-100 p-5">
+					<form method="POST" action="?/addMatch" use:enhance class="space-y-4">
+						<input type="hidden" name="tournamentId" value={data.selectedTournament?.id} />
+						<div class="grid gap-4 md:grid-cols-3">
+							<div>
+								<span class="mb-1 block text-xs font-bold text-slate-500">Fase</span>
+								<select name="stage" class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm">
+									<option value="groups">Grupos</option>
+									<option value="round32">Ronda de 32</option>
+									<option value="round16">Octavos</option>
+									<option value="quarterfinal">Cuartos</option>
+									<option value="semifinal">Semifinal</option>
+									<option value="final">Final</option>
+								</select>
+							</div>
+							<div>
+								<span class="mb-1 block text-xs font-bold text-slate-500">Grupo (opcional)</span>
+								<input name="groupCode" placeholder="A" class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm" />
+							</div>
+							<div>
+								<span class="mb-1 block text-xs font-bold text-slate-500">Fecha y hora</span>
+								<input name="kickoffAt" type="datetime-local" required class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm" />
+							</div>
+							<div>
+								<span class="mb-1 block text-xs font-bold text-slate-500">Equipo A</span>
+								<input name="teamA" required class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm" />
+							</div>
+							<div>
+								<span class="mb-1 block text-xs font-bold text-slate-500">Equipo B</span>
+								<input name="teamB" required class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm" />
+							</div>
+							<div class="flex items-end">
+								<button type="submit" class="w-full rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-slate-800">
+									➕ Agregar
+								</button>
+							</div>
+						</div>
+					</form>
+				</div>
+			</details>
+		{/if}
 	{/if}
 
 	<!-- ═══════════════════════════════════════════════════ -->
 	<!-- TAB: USUARIOS                                      -->
 	<!-- ═══════════════════════════════════════════════════ -->
 	{#if activeTab === 'usuarios'}
-		<div class="grid gap-6 lg:grid-cols-2">
+		<!-- Quick assign to liga -->
+		{#if data.ligas.length > 0}
+			<div class="rounded-xl border border-amber-200 bg-amber-50/50 p-4 shadow-sm">
+				<p class="mb-2 text-xs font-bold uppercase tracking-wider text-amber-600">Inscribir jugadores en ligas</p>
+				<div class="flex flex-wrap gap-2">
+					{#each data.ligas as liga}
+						<a href={`/admin?t=${liga.alias}`} class="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-bold text-amber-700 transition-colors hover:bg-amber-200">
+							⚙️ {liga.name}
+						</a>
+					{/each}
+				</div>
+			</div>
+		{/if}
+
+		<div class="grid gap-6 lg:grid-cols-3">
 			<!-- Create user -->
 			<div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-				<h2 class="mb-1 text-lg font-black text-slate-800">Crear usuario</h2>
-				<p class="mb-4 text-xs text-slate-400">El usuario se asigna automáticamente a la competición activa.</p>
-				<form method="POST" action="?/createUser" class="space-y-3">
+				<h2 class="mb-1 text-base font-black text-slate-800">Crear usuario</h2>
+				<form method="POST" action="?/createUser" use:enhance class="mt-3 space-y-3">
 					<div>
 						<span class="mb-1 block text-xs font-bold text-slate-500">Email</span>
-						<input name="email" type="email" required class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20" />
+						<input name="email" type="email" required class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20" />
 					</div>
 					<div>
 						<span class="mb-1 block text-xs font-bold text-slate-500">Contraseña</span>
-						<input name="password" type="password" minlength={6} maxlength={72} required class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20" />
+						<input name="password" type="password" minlength={6} maxlength={72} required class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20" />
 					</div>
 					<div>
 						<span class="mb-1 block text-xs font-bold text-slate-500">Nickname</span>
-						<input name="nickname" minlength={3} maxlength={20} placeholder="Opcional" class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20" />
+						<input name="nickname" minlength={3} maxlength={20} placeholder="Opcional" class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20" />
 					</div>
 					<div>
 						<span class="mb-1 block text-xs font-bold text-slate-500">Rol</span>
-						<select name="role" class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm">
+						<select name="role" class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
 							<option value="player">Jugador</option>
 							<option value="admin">Administrador</option>
 						</select>
@@ -673,98 +723,84 @@
 				</form>
 			</div>
 
-			<!-- Assign user to liga -->
-			<div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-				<h2 class="mb-1 text-lg font-black text-slate-800">Asignar a torneo</h2>
-				<p class="mb-4 text-xs text-slate-400">Gestioná los participantes de cada torneo y liga desde la pestaña <strong>Ligas</strong>.</p>
-				<button type="button" onclick={() => { activeTab = 'torneos'; }} class="w-full rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-sky-700">
-					🏆 Ir a Ligas
-				</button>
-			</div>
-		</div>
-
-		<!-- User list -->
-		<div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-			<div class="mb-4 flex items-center justify-between">
-				<h2 class="text-lg font-black text-slate-800">Usuarios registrados</h2>
-				<span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">{data.users.length}</span>
-			</div>
-			<div class="overflow-hidden rounded-lg border border-slate-100">
-				<table class="w-full text-sm">
-					<thead>
-						<tr class="border-b border-slate-100 bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
-							<th class="py-3 pl-4 text-left">Usuario</th>
-							<th class="py-3 text-left">Email</th>
-							<th class="py-3 text-center">Rol</th>
-							<th class="py-3 pr-4 text-center">Acciones</th>
-						</tr>
-					</thead>
-					<tbody class="divide-y divide-slate-50">
-						{#each data.users as user}
-							{#if editingUserId === user.id}
-								<tr class="bg-amber-50/50">
-									<td class="py-2 pl-4" colspan="4">
-										<form method="POST" action="?/editUser" class="flex flex-wrap items-center gap-3" use:enhance={() => { return async ({ update }) => { editingUserId = null; await update(); }; }}>
-											<input type="hidden" name="userId" value={user.id} />
+			<!-- User list -->
+			<div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
+				<div class="mb-4 flex items-center justify-between">
+					<h2 class="text-base font-black text-slate-800">Usuarios registrados</h2>
+					<span class="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-500">{data.users.length}</span>
+				</div>
+				<div class="overflow-hidden rounded-lg border border-slate-100">
+					<table class="w-full text-sm">
+						<thead>
+							<tr class="border-b border-slate-100 bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+								<th class="py-2.5 pl-4 text-left">Usuario</th>
+								<th class="py-2.5 text-left">Email</th>
+								<th class="py-2.5 text-center">Rol</th>
+								<th class="py-2.5 pr-4 text-right">Acciones</th>
+							</tr>
+						</thead>
+						<tbody class="divide-y divide-slate-50">
+							{#each data.users as user}
+								{#if editingUserId === user.id}
+									<tr class="bg-amber-50/50">
+										<td class="py-2 pl-4" colspan="4">
+											<form method="POST" action="?/editUser" class="flex flex-wrap items-center gap-3" use:enhance={() => { return async ({ update }) => { editingUserId = null; await update(); }; }}>
+												<input type="hidden" name="userId" value={user.id} />
+												<div class="flex items-center gap-2">
+													<span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-200 text-xs font-bold text-amber-700">
+														{user.nickname.charAt(0).toUpperCase()}
+													</span>
+													<input
+														name="nickname"
+														bind:value={editNickname}
+														minlength={3}
+														maxlength={20}
+														required
+														class="w-36 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20"
+													/>
+												</div>
+												<select name="role" bind:value={editRole} class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold">
+													<option value="player">🎮 Player</option>
+													<option value="admin">👑 Admin</option>
+												</select>
+												<div class="flex gap-2">
+													<button type="submit" class="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">✓</button>
+													<button type="button" onclick={cancelEdit} class="rounded-lg bg-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-300">✕</button>
+												</div>
+											</form>
+										</td>
+									</tr>
+								{:else}
+									<tr class="hover:bg-slate-50/50">
+										<td class="py-2.5 pl-4">
 											<div class="flex items-center gap-2">
-												<span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-200 text-xs font-bold text-amber-700">
+												<span class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-200 text-[10px] font-bold text-slate-600">
 													{user.nickname.charAt(0).toUpperCase()}
 												</span>
-												<input
-													name="nickname"
-													bind:value={editNickname}
-													minlength={3}
-													maxlength={20}
-													required
-													class="w-40 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20"
-												/>
+												<span class="font-semibold text-slate-800">{user.nickname}</span>
 											</div>
-											<span class="text-xs text-slate-400">{user.email}</span>
-											<select name="role" bind:value={editRole} class="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold">
-												<option value="player">🎮 Player</option>
-												<option value="admin">👑 Admin</option>
-											</select>
-											<div class="flex gap-2">
-												<button type="submit" class="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700">
-													✓ Guardar
-												</button>
-												<button type="button" onclick={cancelEdit} class="rounded-lg bg-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-300">
-													✕ Cancelar
-												</button>
-											</div>
-										</form>
-									</td>
-								</tr>
-							{:else}
-								<tr class="hover:bg-slate-50/50">
-									<td class="py-3 pl-4">
-										<div class="flex items-center gap-2">
-											<span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-xs font-bold text-slate-600">
-												{user.nickname.charAt(0).toUpperCase()}
+										</td>
+										<td class="py-2.5 text-xs text-slate-500">{user.email}</td>
+										<td class="py-2.5 text-center">
+											<span class="inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase
+												{user.role === 'admin' ? 'bg-red-100 text-red-700' : 'bg-sky-100 text-sky-700'}">
+												{user.role === 'admin' ? '👑' : '🎮'} {user.role}
 											</span>
-											<span class="font-semibold text-slate-800">{user.nickname}</span>
-										</div>
-									</td>
-									<td class="py-3 text-slate-500">{user.email}</td>
-									<td class="py-3 text-center">
-										<span class="inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase
-											{user.role === 'admin' ? 'bg-red-100 text-red-700' : 'bg-sky-100 text-sky-700'}">
-											{user.role === 'admin' ? '👑 Admin' : '🎮 Player'}
-										</span>
-									</td>
-									<td class="py-3 pr-4 text-center">
-										<button
-											onclick={() => startEdit(user)}
-											class="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200"
-										>
-											✏️ Editar
-										</button>
-									</td>
-								</tr>
-							{/if}
-						{/each}
-					</tbody>
-				</table>
+										</td>
+										<td class="py-2.5 pr-4 text-right">
+											<button
+												onclick={() => startEdit(user)}
+												class="rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200"
+											>
+												✏️
+											</button>
+										</td>
+									</tr>
+								{/if}
+							{/each}
+						</tbody>
+					</table>
+				</div>
 			</div>
 		</div>
 	{/if}
@@ -869,7 +905,7 @@
 				</div>
 
 				<!-- Submit -->
-				<form method="POST" action="?/updateRules" class="mt-4">
+				<form method="POST" action="?/updateRules" use:enhance class="mt-4">
 					<input type="hidden" name="tournamentId" value={data.selectedTournament?.id} />
 					<input type="hidden" name="scoringConfigJson" value={JSON.stringify(scoringConfig)} />
 					<button type="submit" class="w-full rounded-lg bg-sky-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-sky-700">
@@ -890,7 +926,7 @@
 						{/if}
 					</div>
 				{/if}
-				<form method="POST" action="?/lock" class="space-y-3">
+				<form method="POST" action="?/lock" use:enhance class="space-y-3">
 					<input type="hidden" name="tournamentId" value={data.selectedTournament?.id} />
 					<div>
 						<span class="mb-1 block text-xs font-bold text-slate-500">Motivo del bloqueo</span>

@@ -637,7 +637,7 @@ export async function setMatchResult(input: {
 	return toMatch(updated);
 }
 
-async function getTournamentById(tournamentId: string): Promise<Tournament | null> {
+export async function getTournamentById(tournamentId: string): Promise<Tournament | null> {
 	await ensureDatabaseReady();
 	const [row] = await db.select().from(tournaments).where(eq(tournaments.id, tournamentId)).limit(1);
 	return row ? toTournament(row) : null;

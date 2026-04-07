@@ -9,6 +9,7 @@ import {
 	createUserByAdmin,
 	getActiveTournament,
 	getTournamentByAlias,
+	getTournamentById,
 	getScoringRules,
 	getTournamentSettings,
 	listLigas,
@@ -30,13 +31,18 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const alias = url.searchParams.get('t');
 	const selectedTournament = alias ? await getTournamentByAlias(alias) : await getActiveTournament();
 	if (!selectedTournament) {
-		return { selectedTournament: null, tournaments: [], ligas: [], matches: [], users: [], tournamentMembers: [], rules: null, settings: null };
+		return { selectedTournament: null, parentTournament: null, tournaments: [], ligas: [], matches: [], users: [], tournamentMembers: [], rules: null, settings: null };
 	}
+
+	const isLiga = !!selectedTournament.parentTournamentId;
+	const parentTournament = isLiga ? await getTournamentById(selectedTournament.parentTournamentId!) : null;
+	const ligasParentId = isLiga ? selectedTournament.parentTournamentId! : selectedTournament.id;
 
 	return {
 		selectedTournament,
+		parentTournament,
 		tournaments: await listTournaments(),
-		ligas: await listLigas(selectedTournament.id),
+		ligas: await listLigas(ligasParentId),
 		matches: await listMatches(selectedTournament.id),
 		users: await listUsers(),
 		tournamentMembers: await listTournamentMembers(selectedTournament.id),

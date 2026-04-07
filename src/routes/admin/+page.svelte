@@ -453,7 +453,10 @@
 										<p class="text-xs text-slate-400">/{liga.alias}</p>
 									</div>
 								</div>
+							<div class="flex gap-2">
+								<a href={`/admin?t=${liga.alias}`} class="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-bold text-amber-700 hover:bg-amber-200">⚙️ Administrar</a>
 								<a href={`/${liga.alias}`} class="rounded-lg bg-sky-100 px-3 py-1.5 text-xs font-bold text-sky-700 hover:bg-sky-200">Ver tabla</a>
+							</div>
 							</div>
 						{/each}
 					</div>
@@ -462,12 +465,27 @@
 		{/if}
 
 		<!-- ─── Participantes del torneo seleccionado ─── -->
-		{#if data.selectedTournament}
+		{#if data.selectedTournament && !data.selectedTournament.parentTournamentId}
+			<!-- Root competition: direct to manage per liga -->
+			<div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+				<h2 class="text-lg font-black text-slate-800">Participantes</h2>
+				<p class="mt-2 text-sm text-slate-500">Los participantes se gestionan por liga. Seleccioná una liga desde la sección de arriba para agregar o quitar jugadores.</p>
+				{#if data.ligas.length > 0}
+					<div class="mt-3 flex flex-wrap gap-2">
+						{#each data.ligas as liga}
+							<a href={`/admin?t=${liga.alias}`} class="rounded-lg bg-amber-100 px-3 py-1.5 text-xs font-bold text-amber-700 hover:bg-amber-200">⚙️ {liga.name}</a>
+						{/each}
+					</div>
+				{:else}
+					<p class="mt-2 text-xs text-slate-400">Aún no creaste ninguna liga. Creá una arriba para empezar a agregar jugadores.</p>
+				{/if}
+			</div>
+		{:else if data.selectedTournament}
 			<div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
 				<div class="mb-4 flex items-center justify-between">
 					<div>
 						<h2 class="text-lg font-black text-slate-800">Participantes de {data.selectedTournament.name}</h2>
-						<p class="text-xs text-slate-400">Usuarios inscriptos en este torneo/liga</p>
+						<p class="text-xs text-slate-400">Usuarios inscriptos en esta liga</p>
 					</div>
 					<span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">{data.tournamentMembers.length} participantes</span>
 				</div>

@@ -1,4 +1,4 @@
-import { error } from '@sveltejs/kit';
+import { error, fail } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { SideWinner } from '$lib/types';
 import {
@@ -72,7 +72,7 @@ export const actions: Actions = {
 			predPenaltyWinnerRaw === 'A' || predPenaltyWinnerRaw === 'B' ? predPenaltyWinnerRaw : null;
 
 		if (!Number.isFinite(predA) || !Number.isFinite(predB)) {
-			throw error(400, 'Pronostico invalido.');
+			return fail(400, { message: 'Pronostico invalido.' });
 		}
 
 		try {
@@ -86,7 +86,7 @@ export const actions: Actions = {
 			});
 			return { ok: true };
 		} catch (err) {
-			throw error(400, err instanceof Error ? err.message : 'No se pudo guardar el pronostico.');
+			return fail(400, { message: err instanceof Error ? err.message : 'No se pudo guardar el pronostico.' });
 		}
 	}
 };

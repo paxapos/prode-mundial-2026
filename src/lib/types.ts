@@ -77,8 +77,6 @@ export interface Prediction {
 	updatedAt: string;
 }
 
-export interface ScoringRules extends ScoringConfig {}
-
 /** Detail of how many points a single match awarded */
 export interface MatchPointDetail {
 	matchId: string;

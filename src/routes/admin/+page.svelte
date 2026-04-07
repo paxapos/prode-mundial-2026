@@ -1,20 +1,11 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { Alert, Badge, Button, Input, Label, Select } from 'flowbite-svelte';
+	import { Alert, Badge } from 'flowbite-svelte';
 	import { getFlagUrl, VENUES } from '$lib/teams';
 	import { STAGE_LABELS, defaultScoringConfig } from '$lib/scoring-config';
 	import type { MatchStage, ScoringConfig } from '$lib/types';
 
 	let { data, form } = $props();
-
-	const stageNames: Record<string, string> = {
-		groups: 'Fase de Grupos',
-		round32: 'Ronda de 32',
-		round16: 'Octavos de final',
-		quarterfinal: 'Cuartos de final',
-		semifinal: 'Semifinal',
-		final: 'Final'
-	};
 
 	/* ─── Scoring config state ─── */
 	let scoringConfig: ScoringConfig = $state(
@@ -250,7 +241,7 @@
 									{match.stage === 'groups' ? 'bg-sky-100 text-sky-700'
 										: match.stage === 'final' ? 'bg-amber-100 text-amber-700'
 										: 'bg-violet-100 text-violet-700'}">
-									{stageNames[match.stage] ?? match.stage}
+									{STAGE_LABELS[match.stage] ?? match.stage}
 									{#if match.groupCode} {match.groupCode}{/if}
 								</span>
 								<span class="text-xs text-slate-400">

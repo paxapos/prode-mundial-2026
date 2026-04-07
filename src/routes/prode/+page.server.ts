@@ -23,7 +23,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 	}
 
 	const userTournamentIds = await listUserTournamentIds(locals.user.id);
-	const hasAccess = userTournamentIds.includes(source.id) || userTournamentIds.some(id => id !== source.id);
+	const allLigas = await listLigas(source.id);
+	const ligaIds = new Set(allLigas.map(l => l.id));
+	const hasAccess = userTournamentIds.includes(source.id) || userTournamentIds.some(id => ligaIds.has(id));
 	if (!hasAccess) {
 		return {
 			ligas: await listLigas(source.id),

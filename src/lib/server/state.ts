@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { and, asc, eq, isNull, isNotNull } from 'drizzle-orm';
+import { and, asc, count, eq, inArray, isNull, isNotNull } from 'drizzle-orm';
 import type {
 	GroupStandingRow,
 	LeaderboardEntry,
@@ -7,7 +7,6 @@ import type {
 	MatchPointDetail,
 	Prediction,
 	ScoringConfig,
-	ScoringRules,
 	SideWinner,
 	Tournament,
 	TournamentSettings,
@@ -56,8 +55,12 @@ function slugifyAlias(input: string): string {
 		.replace(/-+/g, '-');
 }
 
+function escapeXml(s: string): string {
+	return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+}
+
 function generateTournamentHeaderImage(name: string): string {
-	const title = encodeURIComponent(name);
+	const title = escapeXml(name);
 	const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='1600' height='500' viewBox='0 0 1600 500'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0%' stop-color='#0f766e'/><stop offset='100%' stop-color='#1d4ed8'/></linearGradient></defs><rect width='1600' height='500' fill='url(#g)'/><circle cx='1380' cy='140' r='220' fill='#f59e0b' fill-opacity='0.25'/><circle cx='260' cy='420' r='250' fill='#22c55e' fill-opacity='0.22'/><text x='70' y='292' fill='white' font-size='68' font-family='system-ui' font-weight='800'>${title}</text></svg>`;
 	return `data:image/svg+xml;charset=utf-8,${svg}`;
 }
@@ -181,8 +184,8 @@ export async function getUserByNickname(nickname: string): Promise<User | null> 
 
 export async function getUserCount(): Promise<number> {
 	await ensureDatabaseReady();
-	const rows = await db.select({ id: users.id }).from(users);
-	return rows.length;
+	const [{ value }] = await db.select({ value: count() }).from(users);
+	return value;
 }
 
 export async function bootstrapFirstAdmin(input: { email: string; password: string; nickname?: string }): Promise<User> {
@@ -275,8 +278,7 @@ export async function updateUserByAdmin(input: { userId: string; nickname: strin
 	const [existing] = await db.select().from(users).where(eq(users.id, id)).limit(1);
 	if (!existing) throw new Error('Usuario no encontrado.');
 
-	const nickname = input.nickname.trim();
-	if (nickname.length < 3 || nickname.length > 20) throw new Error('El nickname debe tener entre 3 y 20 caracteres.');
+	const nickname = assertNickname(input.nickname);
 
 	// Check nickname uniqueness (excluding current user)
 	const [dupe] = await db.select().from(users).where(eq(users.nickname, nickname)).limit(1);
@@ -299,8 +301,7 @@ export async function updateOwnProfile(input: { userId: string; nickname: string
 	const [existing] = await db.select().from(users).where(eq(users.id, id)).limit(1);
 	if (!existing) throw new Error('Usuario no encontrado.');
 
-	const nickname = input.nickname.trim();
-	if (nickname.length < 3 || nickname.length > 20) throw new Error('El nickname debe tener entre 3 y 20 caracteres.');
+	const nickname = assertNickname(input.nickname);
 
 	const [dupe] = await db.select().from(users).where(eq(users.nickname, nickname)).limit(1);
 	if (dupe && dupe.id !== id) throw new Error('Ese nickname ya está en uso.');
@@ -619,6 +620,12 @@ export async function setMatchResult(input: {
 	await ensureDatabaseReady();
 	if (input.scoreA < 0 || input.scoreB < 0) throw new Error('El resultado real no puede tener goles negativos.');
 
+	// Knockout ties require a penalty winner
+	const [existing] = await db.select().from(tournamentMatches).where(and(eq(tournamentMatches.id, input.matchId), eq(tournamentMatches.tournamentId, input.tournamentId))).limit(1);
+	if (existing && existing.stage !== 'groups' && input.scoreA === input.scoreB && !input.penaltyWinner) {
+		throw new Error('Los partidos de eliminación directa con empate requieren un ganador por penales.');
+	}
+
 	const [updated] = await db
 		.update(tournamentMatches)
 		.set({ scoreA: input.scoreA, scoreB: input.scoreB, penaltyWinner: input.penaltyWinner, isClosed: true })
@@ -643,7 +650,7 @@ export async function getTournamentById(tournamentId: string): Promise<Tournamen
 	return row ? toTournament(row) : null;
 }
 
-export async function getScoringRules(tournamentId: string): Promise<ScoringRules> {
+export async function getScoringRules(tournamentId: string): Promise<ScoringConfig> {
 	const tournament = await getTournamentById(tournamentId);
 	if (!tournament) throw new Error('Liga inexistente.');
 	const source = tournament.parentTournamentId ? await getTournamentById(tournament.parentTournamentId) : tournament;
@@ -655,7 +662,7 @@ export async function updateScoringRules(input: {
 	tournamentId: string;
 	scoringConfig: ScoringConfig;
 	actorUserId?: string;
-}): Promise<ScoringRules> {
+}): Promise<ScoringConfig> {
 	await ensureDatabaseReady();
 
 	const [updated] = await db
@@ -716,10 +723,9 @@ export async function getLeaderboard(tournamentId: string): Promise<LeaderboardE
 	if (!tournament) throw new Error('Liga inexistente.');
 	const sourceId = getSourceId(tournament);
 
-	const [memberships, allUsers, predictionRows, matchRows, sourceTournament] = await Promise.all([
+	const [memberships, predictionRows, matchRows, sourceTournament] = await Promise.all([
 		// Users enrolled in THIS liga/tournament
 		db.select().from(userTournaments).where(eq(userTournaments.tournamentId, tournamentId)),
-		listUsers(),
 		// Predictions from the SOURCE tournament
 		db.select().from(tournamentPredictions).where(eq(tournamentPredictions.tournamentId, sourceId)),
 		// Matches from the SOURCE tournament
@@ -728,8 +734,11 @@ export async function getLeaderboard(tournamentId: string): Promise<LeaderboardE
 	]);
 	if (!sourceTournament) throw new Error('Competicion inexistente.');
 
-	const userIds = new Set(memberships.map((m) => String(m.userId)));
-	const usersInTournament = allUsers.filter((u) => userIds.has(u.id));
+	const memberUserIds = memberships.map((m) => m.userId);
+	const userRows = memberUserIds.length > 0
+		? await db.select().from(users).where(inArray(users.id, memberUserIds))
+		: [];
+	const usersInTournament = userRows.map(toUser);
 	const matchMap = new Map(matchRows.map((row) => [row.id, toMatch(row)]));
 	const config = sourceTournament.scoringConfig;
 
@@ -746,7 +755,8 @@ export async function getLeaderboard(tournamentId: string): Promise<LeaderboardE
 			const stageConfig = getStageConfig(config, match.stage);
 			const predictedOutcome = getOutcome(prediction.predA, prediction.predB, match.stage, prediction.predPenaltyWinner);
 			const actualOutcome = getOutcome(match.scoreA, match.scoreB, match.stage, match.penaltyWinner);
-			const exact = prediction.predA === match.scoreA && prediction.predB === match.scoreB;
+			const exact = prediction.predA === match.scoreA && prediction.predB === match.scoreB
+				&& (match.stage === 'groups' || match.scoreA !== match.scoreB || prediction.predPenaltyWinner === match.penaltyWinner);
 
 			if (exact) {
 				totalPoints += stageConfig.outcome + stageConfig.exact;
@@ -798,7 +808,8 @@ export async function getPlayerMatchDetails(userId: string, tournamentId: string
 		const stageConfig = getStageConfig(config, match.stage);
 		const predictedOutcome = getOutcome(pred.predA, pred.predB, match.stage, pred.predPenaltyWinner);
 		const actualOutcome = getOutcome(match.scoreA, match.scoreB, match.stage, match.penaltyWinner);
-		const exact = pred.predA === match.scoreA && pred.predB === match.scoreB;
+		const exact = pred.predA === match.scoreA && pred.predB === match.scoreB
+			&& (match.stage === 'groups' || match.scoreA !== match.scoreB || pred.predPenaltyWinner === match.penaltyWinner);
 
 		let outcomePoints = 0;
 		let exactPoints = 0;

@@ -84,10 +84,6 @@ export function getFlagUrl(teamName: string, width: number = 80): string {
 	return `https://flagcdn.com/w${w}/${code}.png`;
 }
 
-export function getGroupTeams(group: string): TeamInfo[] {
-	return TEAMS.filter((t) => t.group === group);
-}
-
 /** Venue/stadium data */
 export interface Venue {
 	city: string;

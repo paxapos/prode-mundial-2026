@@ -38,21 +38,6 @@ export const sessions = sqliteTable(
 	})
 );
 
-export const matches = sqliteTable('matches', {
-	id: text('id').primaryKey(),
-	stage: text('stage', {
-		enum: ['groups', 'round32', 'round16', 'quarterfinal', 'semifinal', 'final']
-	}).notNull(),
-	groupCode: text('group_code'),
-	teamA: text('team_a').notNull(),
-	teamB: text('team_b').notNull(),
-	kickoffAt: text('kickoff_at').notNull(),
-	scoreA: integer('score_a'),
-	scoreB: integer('score_b'),
-	penaltyWinner: text('penalty_winner', { enum: ['A', 'B'] }),
-	isClosed: integer('is_closed', { mode: 'boolean' }).notNull().default(false)
-});
-
 export const tournaments = sqliteTable(
 	'tournaments',
 	{
@@ -131,39 +116,6 @@ export const tournamentPredictions = sqliteTable(
 		)
 	})
 );
-
-export const predictions = sqliteTable(
-	'predictions',
-	{
-		id: integer('id').primaryKey({ autoIncrement: true }),
-		userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-		matchId: text('match_id').notNull().references(() => matches.id, { onDelete: 'cascade' }),
-		predA: integer('pred_a').notNull(),
-		predB: integer('pred_b').notNull(),
-		predPenaltyWinner: text('pred_penalty_winner', { enum: ['A', 'B'] }),
-		createdAt: text('created_at').notNull(),
-		updatedAt: text('updated_at').notNull()
-	},
-	(table) => ({
-		uniquePredictionIdx: uniqueIndex('predictions_user_match_idx').on(table.userId, table.matchId)
-	})
-);
-
-export const scoringRules = sqliteTable('scoring_rules', {
-	id: integer('id').primaryKey(),
-	version: integer('version').notNull(),
-	pointsOutcome: integer('points_outcome').notNull(),
-	pointsExact: integer('points_exact').notNull(),
-	pointsBracket: integer('points_bracket').notNull(),
-	updatedAt: text('updated_at').notNull()
-});
-
-export const tournamentSettings = sqliteTable('tournament_settings', {
-	id: integer('id').primaryKey(),
-	state: text('state', { enum: ['draft', 'open_predictions', 'locked', 'finished'] }).notNull(),
-	tournamentStartAt: text('tournament_start_at').notNull(),
-	lockReason: text('lock_reason')
-});
 
 export const auditLogs = sqliteTable('audit_logs', {
 	id: integer('id').primaryKey({ autoIncrement: true }),

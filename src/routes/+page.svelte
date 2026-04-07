@@ -188,34 +188,32 @@
 									<span>{formatDate(match.kickoffAt)} · {formatTime(match.kickoffAt)} hs</span>
 									<span>{venueCity(match.venue)}</span>
 								</div>
-								<!-- Teams + score row -->
-								<div class="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-									<!-- Team A (right-aligned) -->
-									<div class="flex items-center justify-end gap-2">
-										<span class="truncate text-sm font-semibold text-slate-800">{match.teamA}</span>
+								<!-- Teams + score row (6-col aligned grid) -->
+								<div class="grid grid-cols-[1fr_28px_32px_32px_28px_1fr] items-center gap-x-2">
+									<!-- Col 1: Team A name (right-aligned) -->
+									<span class="truncate text-right text-sm font-semibold text-slate-800">{match.teamA}</span>
+									<!-- Col 2: Team A flag -->
+									<div class="flex justify-center">
 										{#if getFlagUrl(match.teamA)}
 											<img src={getFlagUrl(match.teamA, 40)} alt={match.teamA} class="h-5 w-7 shrink-0 rounded-sm object-cover shadow-sm" />
 										{/if}
 									</div>
-
-									<!-- Score -->
-									<div class="flex items-center gap-1.5">
-										<span class="inline-flex h-8 w-8 items-center justify-center rounded-lg {match.scoreA !== null ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-400'} text-sm font-bold">
-											{match.scoreA ?? '-'}
-										</span>
-										<span class="text-xs text-slate-300">:</span>
-										<span class="inline-flex h-8 w-8 items-center justify-center rounded-lg {match.scoreB !== null ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-400'} text-sm font-bold">
-											{match.scoreB ?? '-'}
-										</span>
-									</div>
-
-									<!-- Team B (left-aligned) -->
-									<div class="flex items-center gap-2">
+									<!-- Col 3: Score A -->
+									<span class="inline-flex h-8 w-8 items-center justify-center rounded-lg {match.scoreA !== null ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-400'} text-sm font-bold">
+										{match.scoreA ?? '-'}
+									</span>
+									<!-- Col 4: Score B -->
+									<span class="inline-flex h-8 w-8 items-center justify-center rounded-lg {match.scoreB !== null ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-400'} text-sm font-bold">
+										{match.scoreB ?? '-'}
+									</span>
+									<!-- Col 5: Team B flag -->
+									<div class="flex justify-center">
 										{#if getFlagUrl(match.teamB)}
 											<img src={getFlagUrl(match.teamB, 40)} alt={match.teamB} class="h-5 w-7 shrink-0 rounded-sm object-cover shadow-sm" />
 										{/if}
-										<span class="truncate text-sm font-semibold text-slate-800">{match.teamB}</span>
 									</div>
+									<!-- Col 6: Team B name (left-aligned) -->
+									<span class="truncate text-left text-sm font-semibold text-slate-800">{match.teamB}</span>
 								</div>
 							</div>
 						{/each}

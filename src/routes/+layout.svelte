@@ -3,6 +3,7 @@
 	import { Badge, Button } from 'flowbite-svelte';
 	import { page } from '$app/stores';
 	import favicon from '$lib/assets/favicon.svg';
+	import YouTubeModal from '$lib/components/YouTubeModal.svelte';
 
 	let { children, data } = $props();
 
@@ -39,6 +40,8 @@
 	<meta name="twitter:description" content="Prode para los amigos, Mundial 2026" />
 	<meta name="twitter:image" content={ogImage} />
 </svelte:head>
+
+<YouTubeModal />
 
 <div class="mx-auto min-h-screen max-w-6xl px-4 pb-10 pt-6 md:px-6">
 	<!-- ═══ STICKY NAV ═══ -->

@@ -2,7 +2,7 @@ import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import { env } from '$env/dynamic/private';
 import { createSession } from '$lib/server/auth';
-import { authenticateUser, bootstrapFirstAdmin, getUserCount } from '$lib/server/state';
+import { authenticateUser, bootstrapFirstAdmin, getUserCount, registerUser } from '$lib/server/state';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	if (locals.user) {
@@ -21,24 +21,57 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 };
 
 export const actions: Actions = {
-	default: async ({ request, cookies }) => {
+	login: async ({ request, cookies }) => {
 		const formData = await request.formData();
 		const email = String(formData.get('email') ?? '');
 		const password = String(formData.get('password') ?? '');
-		const nickname = String(formData.get('nickname') ?? '');
 
 		let user;
 		try {
 			user =
 				(await getUserCount()) === 0
-					? await bootstrapFirstAdmin({ email, password, nickname })
+					? await bootstrapFirstAdmin({ email, password })
 					: await authenticateUser({ email, password });
 			await createSession(cookies, user.id);
 		} catch (error) {
 			return fail(400, {
 				message: error instanceof Error ? error.message : 'No se pudo iniciar sesion.',
 				email,
-				nickname
+				action: 'login' as const
+			});
+		}
+		throw redirect(303, user.role === 'admin' ? '/admin' : '/prode');
+	},
+	register: async ({ request, cookies }) => {
+		const formData = await request.formData();
+		const email = String(formData.get('email') ?? '');
+		const password = String(formData.get('password') ?? '');
+		const nickname = String(formData.get('nickname') ?? '').trim();
+
+		if (!nickname || nickname.length < 3 || nickname.length > 20) {
+			return fail(400, {
+				message: 'El nickname es obligatorio (entre 3 y 20 caracteres).',
+				email,
+				nickname,
+				action: 'register' as const
+			});
+		}
+
+		let user;
+		try {
+			// If no users exist, first one becomes admin
+			if ((await getUserCount()) === 0) {
+				user = await bootstrapFirstAdmin({ email, password, nickname });
+			} else {
+				user = await registerUser({ email, password, nickname });
+			}
+			await createSession(cookies, user.id);
+		} catch (error) {
+			return fail(400, {
+				message: error instanceof Error ? error.message : 'No se pudo crear la cuenta.',
+				email,
+				nickname,
+				action: 'register' as const
 			});
 		}
 		throw redirect(303, user.role === 'admin' ? '/admin' : '/prode');

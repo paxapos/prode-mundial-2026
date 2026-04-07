@@ -22,19 +22,26 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
 	}
 
 	let user;
+	let isNew = false;
 	try {
 		const tokens = await exchangeCodeForTokens(code);
 		const googleUser = await getGoogleUserInfo(tokens.access_token);
-		user = await findOrCreateGoogleUser({
+		const result = await findOrCreateGoogleUser({
 			googleId: googleUser.sub,
 			email: googleUser.email,
 			name: googleUser.name,
 			avatarUrl: googleUser.picture
 		});
+		user = result.user;
+		isNew = result.isNew;
 	} catch {
 		throw redirect(303, '/login?error=google_auth_failed');
 	}
 
 	await createSession(cookies, user.id);
+
+	if (isNew) {
+		throw redirect(303, '/login/complete-profile');
+	}
 	throw redirect(303, user.role === 'admin' ? '/admin' : '/prode');
 };

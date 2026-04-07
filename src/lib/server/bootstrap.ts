@@ -153,53 +153,54 @@ function getAllMatches(): MatchSeed[] {
 		m('g-072', 'groups', 'L', 'Croacia', 'Ghana', et('2026-06-29', 18), 'Gillette Stadium'),
 
 		// ============================================================
-		// RONDA DE 32 - 16 partidos (1-4 Jul)
+		// RONDA DE 32 - 16 partidos (28 Jun - 3 Jul)
+		// Bracket oficial FIFA 2026
 		// ============================================================
-		m('r32-01', 'round32', null, '1° Grupo A', '3° Grupo C/D/E', et('2026-07-01', 12), 'Estadio Azteca'),
-		m('r32-02', 'round32', null, '1° Grupo B', '3° Grupo A/D/E', et('2026-07-01', 15), 'BC Place'),
-		m('r32-03', 'round32', null, '1° Grupo C', '3° Grupo A/B/F', et('2026-07-01', 18), 'Hard Rock Stadium'),
-		m('r32-04', 'round32', null, '1° Grupo D', '3° Grupo B/E/F', et('2026-07-01', 21), 'AT&T Stadium'),
+		m('r32-01', 'round32', null, '2° Grupo A', '2° Grupo B', et('2026-06-28', 15), 'SoFi Stadium'),
+		m('r32-02', 'round32', null, '1° Grupo E', '3° Grupo A/B/C/D/F', et('2026-06-29', 16, 30), 'Gillette Stadium'),
+		m('r32-03', 'round32', null, '1° Grupo F', '2° Grupo C', et('2026-06-29', 19), 'Estadio BBVA'),
+		m('r32-04', 'round32', null, '1° Grupo C', '2° Grupo F', et('2026-06-29', 12), 'NRG Stadium'),
 
-		m('r32-05', 'round32', null, '1° Grupo E', '3° Grupo A/C/D', et('2026-07-02', 12), 'Mercedes-Benz Stadium'),
-		m('r32-06', 'round32', null, '1° Grupo F', '3° Grupo B/C/D', et('2026-07-02', 15), 'MetLife Stadium'),
-		m('r32-07', 'round32', null, '2° Grupo A', '2° Grupo B', et('2026-07-02', 18), 'Estadio BBVA'),
-		m('r32-08', 'round32', null, '2° Grupo C', '2° Grupo D', et('2026-07-02', 21), 'SoFi Stadium'),
+		m('r32-05', 'round32', null, '1° Grupo I', '3° Grupo C/D/F/G/H', et('2026-06-30', 17), 'MetLife Stadium'),
+		m('r32-06', 'round32', null, '2° Grupo E', '2° Grupo I', et('2026-06-30', 12), 'AT&T Stadium'),
+		m('r32-07', 'round32', null, '1° Grupo A', '3° Grupo C/E/F/H/I', et('2026-06-30', 19), 'Estadio Azteca'),
+		m('r32-08', 'round32', null, '1° Grupo L', '3° Grupo E/H/I/J/K', et('2026-07-01', 12), 'Mercedes-Benz Stadium'),
 
-		m('r32-09', 'round32', null, '1° Grupo G', '3° Grupo I/J/K', et('2026-07-03', 12), 'Lumen Field'),
-		m('r32-10', 'round32', null, '1° Grupo H', '3° Grupo G/J/K', et('2026-07-03', 15), 'NRG Stadium'),
-		m('r32-11', 'round32', null, '1° Grupo I', '3° Grupo G/H/L', et('2026-07-03', 18), 'Lincoln Financial Field'),
-		m('r32-12', 'round32', null, '1° Grupo J', '3° Grupo H/I/L', et('2026-07-03', 21), 'Hard Rock Stadium'),
+		m('r32-09', 'round32', null, '1° Grupo D', '3° Grupo B/E/F/I/J', et('2026-07-01', 17), 'Levi\'s Stadium'),
+		m('r32-10', 'round32', null, '1° Grupo G', '3° Grupo A/E/H/I/J', et('2026-07-01', 13), 'Lumen Field'),
+		m('r32-11', 'round32', null, '2° Grupo K', '2° Grupo L', et('2026-07-02', 19), 'BMO Field'),
+		m('r32-12', 'round32', null, '1° Grupo H', '2° Grupo J', et('2026-07-02', 12), 'SoFi Stadium'),
 
-		m('r32-13', 'round32', null, '1° Grupo K', '3° Grupo G/I/J', et('2026-07-04', 12), 'AT&T Stadium'),
-		m('r32-14', 'round32', null, '1° Grupo L', '3° Grupo H/K/L', et('2026-07-04', 15), 'Arrowhead Stadium'),
-		m('r32-15', 'round32', null, '2° Grupo E', '2° Grupo F', et('2026-07-04', 18), 'Bay Area Stadium'),
-		m('r32-16', 'round32', null, '2° Grupo G', '2° Grupo H', et('2026-07-04', 21), 'Gillette Stadium'),
-
-		// ============================================================
-		// OCTAVOS DE FINAL - 8 partidos (5-8 Jul)
-		// ============================================================
-		m('r16-01', 'round16', null, 'G. R32-01', 'G. R32-02', et('2026-07-05', 15), 'MetLife Stadium'),
-		m('r16-02', 'round16', null, 'G. R32-03', 'G. R32-04', et('2026-07-05', 18), 'SoFi Stadium'),
-		m('r16-03', 'round16', null, 'G. R32-05', 'G. R32-06', et('2026-07-06', 15), 'Hard Rock Stadium'),
-		m('r16-04', 'round16', null, 'G. R32-07', 'G. R32-08', et('2026-07-06', 18), 'AT&T Stadium'),
-		m('r16-05', 'round16', null, 'G. R32-09', 'G. R32-10', et('2026-07-07', 15), 'Mercedes-Benz Stadium'),
-		m('r16-06', 'round16', null, 'G. R32-11', 'G. R32-12', et('2026-07-07', 18), 'NRG Stadium'),
-		m('r16-07', 'round16', null, 'G. R32-13', 'G. R32-14', et('2026-07-08', 15), 'Lincoln Financial Field'),
-		m('r16-08', 'round16', null, 'G. R32-15', 'G. R32-16', et('2026-07-08', 18), 'Lumen Field'),
+		m('r32-13', 'round32', null, '1° Grupo B', '3° Grupo E/F/G/I/J', et('2026-07-02', 20), 'BC Place'),
+		m('r32-14', 'round32', null, '1° Grupo J', '2° Grupo H', et('2026-07-03', 18), 'Hard Rock Stadium'),
+		m('r32-15', 'round32', null, '1° Grupo K', '3° Grupo D/E/I/J/L', et('2026-07-03', 20, 30), 'Arrowhead Stadium'),
+		m('r32-16', 'round32', null, '2° Grupo D', '2° Grupo G', et('2026-07-03', 13), 'AT&T Stadium'),
 
 		// ============================================================
-		// CUARTOS DE FINAL - 4 partidos (9-10 Jul)
+		// OCTAVOS DE FINAL - 8 partidos (4-7 Jul)
 		// ============================================================
-		m('qf-01', 'quarterfinal', null, 'G. 8vos-1', 'G. 8vos-2', et('2026-07-09', 15), 'SoFi Stadium'),
-		m('qf-02', 'quarterfinal', null, 'G. 8vos-3', 'G. 8vos-4', et('2026-07-09', 18), 'Hard Rock Stadium'),
-		m('qf-03', 'quarterfinal', null, 'G. 8vos-5', 'G. 8vos-6', et('2026-07-10', 15), 'AT&T Stadium'),
-		m('qf-04', 'quarterfinal', null, 'G. 8vos-7', 'G. 8vos-8', et('2026-07-10', 18), 'MetLife Stadium'),
+		m('r16-01', 'round16', null, 'G. R32-02', 'G. R32-05', et('2026-07-04', 17), 'Lincoln Financial Field'),
+		m('r16-02', 'round16', null, 'G. R32-01', 'G. R32-03', et('2026-07-04', 12), 'NRG Stadium'),
+		m('r16-03', 'round16', null, 'G. R32-04', 'G. R32-06', et('2026-07-05', 16), 'MetLife Stadium'),
+		m('r16-04', 'round16', null, 'G. R32-07', 'G. R32-08', et('2026-07-05', 18), 'Estadio Azteca'),
+		m('r16-05', 'round16', null, 'G. R32-11', 'G. R32-12', et('2026-07-06', 14), 'AT&T Stadium'),
+		m('r16-06', 'round16', null, 'G. R32-09', 'G. R32-10', et('2026-07-06', 17), 'Lumen Field'),
+		m('r16-07', 'round16', null, 'G. R32-14', 'G. R32-16', et('2026-07-07', 12), 'Mercedes-Benz Stadium'),
+		m('r16-08', 'round16', null, 'G. R32-13', 'G. R32-15', et('2026-07-07', 13), 'BC Place'),
 
 		// ============================================================
-		// SEMIFINALES - 2 partidos (13-14 Jul)
+		// CUARTOS DE FINAL - 4 partidos (9-11 Jul)
 		// ============================================================
-		m('sf-01', 'semifinal', null, 'G. QF-1', 'G. QF-2', et('2026-07-13', 20), 'MetLife Stadium'),
-		m('sf-02', 'semifinal', null, 'G. QF-3', 'G. QF-4', et('2026-07-14', 20), 'AT&T Stadium'),
+		m('qf-01', 'quarterfinal', null, 'G. 8vos-1', 'G. 8vos-2', et('2026-07-09', 16), 'Gillette Stadium'),
+		m('qf-02', 'quarterfinal', null, 'G. 8vos-5', 'G. 8vos-6', et('2026-07-10', 12), 'SoFi Stadium'),
+		m('qf-03', 'quarterfinal', null, 'G. 8vos-3', 'G. 8vos-4', et('2026-07-11', 17), 'Hard Rock Stadium'),
+		m('qf-04', 'quarterfinal', null, 'G. 8vos-7', 'G. 8vos-8', et('2026-07-11', 20), 'Arrowhead Stadium'),
+
+		// ============================================================
+		// SEMIFINALES - 2 partidos (14-15 Jul)
+		// ============================================================
+		m('sf-01', 'semifinal', null, 'G. QF-1', 'G. QF-2', et('2026-07-14', 14), 'AT&T Stadium'),
+		m('sf-02', 'semifinal', null, 'G. QF-3', 'G. QF-4', et('2026-07-15', 15), 'Mercedes-Benz Stadium'),
 
 		// ============================================================
 		// TERCER PUESTO (18 Jul) y FINAL (19 Jul)

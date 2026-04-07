@@ -2,6 +2,7 @@
 	import { page } from '$app/stores';
 	import { STAGE_LABELS } from '$lib/scoring-config';
 	import type { MatchStage } from '$lib/types';
+	import UserAvatar from '$lib/components/UserAvatar.svelte';
 	let { data } = $props();
 	const ogImage = $derived(`${$page.url.origin}/og-image.jpg`);
 
@@ -63,7 +64,10 @@
 								{/if}
 							</td>
 							<td class="px-6 py-4 text-base font-semibold">
-								<a href="/{data.tournament.alias}/prode/{row.nickname}" class="text-blue-600 hover:text-blue-800 hover:underline">{row.nickname}</a>
+								<a href="/{data.tournament.alias}/prode/{row.nickname}" class="flex items-center gap-2.5 text-blue-600 hover:text-blue-800 hover:underline">
+									<UserAvatar nickname={row.nickname} avatarUrl={row.avatarUrl} size="sm" />
+									{row.nickname}
+								</a>
 							</td>
 							<td class="px-6 py-4 text-center">
 								<span class="inline-flex min-w-[2.5rem] items-center justify-center rounded-xl bg-emerald-50 px-3 py-1 text-base font-black text-emerald-700">{row.totalPoints}</span>

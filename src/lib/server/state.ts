@@ -199,12 +199,12 @@ export async function authenticateUser(input: { email: string; password: string 
 	return toUser(row);
 }
 
-export async function findOrCreateGoogleUser(input: { googleId: string; email: string; name: string; avatarUrl?: string }): Promise<User> {
+export async function findOrCreateGoogleUser(input: { googleId: string; email: string; name: string; avatarUrl?: string }): Promise<{ user: User; isNew: boolean }> {
 	await ensureDatabaseReady();
 
 	// Look up by googleId first
 	const [byGoogleId] = await db.select().from(users).where(eq(users.googleId, input.googleId)).limit(1);
-	if (byGoogleId) return toUser(byGoogleId);
+	if (byGoogleId) return { user: toUser(byGoogleId), isNew: false };
 
 	// Look up by email (existing local user, link their Google account)
 	const [byEmail] = await db.select().from(users).where(eq(users.username, input.email.toLowerCase())).limit(1);
@@ -215,7 +215,7 @@ export async function findOrCreateGoogleUser(input: { googleId: string; email: s
 			.where(eq(users.id, byEmail.id))
 			.returning();
 		await createAuditLog({ userId: updated.id, action: 'google_account_linked', entityType: 'user', entityId: String(updated.id), payload: { googleId: input.googleId } });
-		return toUser(updated);
+		return { user: toUser(updated), isNew: false };
 	}
 
 	// New user via Google
@@ -258,11 +258,55 @@ export async function findOrCreateGoogleUser(input: { googleId: string; email: s
 	}
 
 	await createAuditLog({ userId: created.id, action: 'user_created_google', entityType: 'user', entityId: String(created.id), payload: { email: input.email, role } });
-	return toUser(created);
+	return { user: toUser(created), isNew: true };
 }
 
 export async function createUserByAdmin(input: { email: string; password: string; nickname?: string; role: UserRole }): Promise<User> {
 	return createUserInternal(input);
+}
+
+export async function registerUser(input: { email: string; password: string; nickname: string }): Promise<User> {
+	return createUserInternal({ ...input, role: 'player' });
+}
+
+export async function updateUserByAdmin(input: { userId: string; nickname: string; role: UserRole; actorUserId: string }): Promise<User> {
+	await ensureDatabaseReady();
+	const id = Number(input.userId);
+	const [existing] = await db.select().from(users).where(eq(users.id, id)).limit(1);
+	if (!existing) throw new Error('Usuario no encontrado.');
+
+	const nickname = input.nickname.trim();
+	if (nickname.length < 3 || nickname.length > 20) throw new Error('El nickname debe tener entre 3 y 20 caracteres.');
+
+	// Check nickname uniqueness (excluding current user)
+	const [dupe] = await db.select().from(users).where(eq(users.nickname, nickname)).limit(1);
+	if (dupe && dupe.id !== id) throw new Error('Ese nickname ya está en uso.');
+
+	const [updated] = await db.update(users).set({ nickname, role: input.role }).where(eq(users.id, id)).returning();
+	await createAuditLog({
+		userId: Number(input.actorUserId),
+		action: 'user_updated_by_admin',
+		entityType: 'user',
+		entityId: String(id),
+		payload: { nickname, role: input.role, previousNickname: existing.nickname, previousRole: existing.role }
+	});
+	return toUser(updated);
+}
+
+export async function updateOwnProfile(input: { userId: string; nickname: string }): Promise<User> {
+	await ensureDatabaseReady();
+	const id = Number(input.userId);
+	const [existing] = await db.select().from(users).where(eq(users.id, id)).limit(1);
+	if (!existing) throw new Error('Usuario no encontrado.');
+
+	const nickname = input.nickname.trim();
+	if (nickname.length < 3 || nickname.length > 20) throw new Error('El nickname debe tener entre 3 y 20 caracteres.');
+
+	const [dupe] = await db.select().from(users).where(eq(users.nickname, nickname)).limit(1);
+	if (dupe && dupe.id !== id) throw new Error('Ese nickname ya está en uso.');
+
+	const [updated] = await db.update(users).set({ nickname }).where(eq(users.id, id)).returning();
+	return toUser(updated);
 }
 
 export async function listUsers(): Promise<User[]> {
@@ -442,6 +486,31 @@ export async function listUserTournamentIds(userId: string): Promise<string[]> {
 	await ensureDatabaseReady();
 	const rows = await db.select({ tournamentId: userTournaments.tournamentId }).from(userTournaments).where(eq(userTournaments.userId, Number(userId)));
 	return rows.map((r) => r.tournamentId);
+}
+
+export async function listTournamentMembers(tournamentId: string): Promise<User[]> {
+	await ensureDatabaseReady();
+	const rows = await db
+		.select({ user: users })
+		.from(userTournaments)
+		.innerJoin(users, eq(userTournaments.userId, users.id))
+		.where(eq(userTournaments.tournamentId, tournamentId))
+		.orderBy(asc(users.nickname));
+	return rows.map((r) => toUser(r.user));
+}
+
+export async function removeUserFromTournament(input: { userId: string; tournamentId: string; actorUserId: string }): Promise<void> {
+	await ensureDatabaseReady();
+	await db
+		.delete(userTournaments)
+		.where(and(eq(userTournaments.userId, Number(input.userId)), eq(userTournaments.tournamentId, input.tournamentId)));
+	await createAuditLog({
+		userId: Number(input.actorUserId),
+		action: 'user_removed_from_tournament',
+		entityType: 'tournament',
+		entityId: input.tournamentId,
+		payload: { userId: input.userId }
+	});
 }
 
 async function isTournamentLocked(tournament: Tournament): Promise<boolean> {
@@ -693,7 +762,7 @@ export async function getLeaderboard(tournamentId: string): Promise<LeaderboardE
 				bracketPoints += stageConfig.bracketTeam;
 			}
 		}
-		return { userId: user.id, nickname: user.nickname, role: user.role, totalPoints, exactHits, outcomeHits, bracketPoints };
+		return { userId: user.id, nickname: user.nickname, role: user.role, avatarUrl: user.avatarUrl, totalPoints, exactHits, outcomeHits, bracketPoints };
 	});
 
 	return board.sort((a, b) => {

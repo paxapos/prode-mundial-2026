@@ -15,10 +15,13 @@ import {
 	listUsers,
 	listMatches,
 	listTournaments,
+	listTournamentMembers,
 	lockTournament,
+	removeUserFromTournament,
 	setMatchResult,
 	updateMatchTeams,
-	updateScoringRules
+	updateScoringRules,
+	updateUserByAdmin
 } from '$lib/server/state';
 
 export const load: PageServerLoad = async ({ locals, url }) => {
@@ -27,7 +30,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const alias = url.searchParams.get('t');
 	const selectedTournament = alias ? await getTournamentByAlias(alias) : await getActiveTournament();
 	if (!selectedTournament) {
-		return { selectedTournament: null, tournaments: [], ligas: [], matches: [], users: [], rules: null, settings: null };
+		return { selectedTournament: null, tournaments: [], ligas: [], matches: [], users: [], tournamentMembers: [], rules: null, settings: null };
 	}
 
 	return {
@@ -36,6 +39,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		ligas: await listLigas(selectedTournament.id),
 		matches: await listMatches(selectedTournament.id),
 		users: await listUsers(),
+		tournamentMembers: await listTournamentMembers(selectedTournament.id),
 		rules: await getScoringRules(selectedTournament.id),
 		settings: await getTournamentSettings(selectedTournament.id)
 	};
@@ -97,6 +101,21 @@ export const actions: Actions = {
 		const reason = String(data.get('reason') ?? 'Bloqueo manual por administracion.');
 		await lockTournament(tournamentId, reason, locals.user.id);
 		return { ok: true };
+	},
+	editUser: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') throw error(403, 'Solo administradores.');
+		const data = await request.formData();
+		const userId = String(data.get('userId') ?? '');
+		const nickname = String(data.get('nickname') ?? '');
+		const roleInput = String(data.get('role') ?? 'player');
+		const role = roleInput === 'admin' ? 'admin' : 'player';
+
+		try {
+			await updateUserByAdmin({ userId, nickname, role, actorUserId: locals.user.id });
+			return { ok: true };
+		} catch (err) {
+			return fail(400, { message: err instanceof Error ? err.message : 'No se pudo editar usuario.' });
+		}
 	},
 	createUser: async ({ request, locals }) => {
 		if (!locals.user || locals.user.role !== 'admin') throw error(403, 'Solo administradores.');
@@ -175,6 +194,30 @@ export const actions: Actions = {
 			return { ok: true };
 		} catch (err) {
 			return fail(400, { message: err instanceof Error ? err.message : 'No se pudo crear partido.' });
+		}
+	},
+	removeFromTournament: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') throw error(403, 'Solo administradores.');
+		const data = await request.formData();
+		const userId = String(data.get('userId') ?? '');
+		const tournamentId = String(data.get('tournamentId') ?? '');
+		try {
+			await removeUserFromTournament({ userId, tournamentId, actorUserId: locals.user.id });
+			return { ok: true };
+		} catch (err) {
+			return fail(400, { message: err instanceof Error ? err.message : 'No se pudo quitar usuario.' });
+		}
+	},
+	addToTournament: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') throw error(403, 'Solo administradores.');
+		const data = await request.formData();
+		const userId = String(data.get('userId') ?? '');
+		const tournamentId = String(data.get('tournamentId') ?? '');
+		try {
+			await assignUserToTournament({ userId, tournamentId, actorUserId: locals.user.id });
+			return { ok: true };
+		} catch (err) {
+			return fail(400, { message: err instanceof Error ? err.message : 'No se pudo agregar usuario.' });
 		}
 	},
 	createLiga: async ({ request, locals }) => {

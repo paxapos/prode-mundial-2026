@@ -57,7 +57,7 @@
 	/* ─── Tabs ──────────────────────────────────────────── */
 	const tabs = [
 		{ id: 'groups', label: 'Grupos', icon: '⚽' },
-		{ id: 'round32', label: '32avos', icon: '🏟️' },
+		{ id: 'round32', label: '16avos', icon: '🏟️' },
 		{ id: 'round16', label: 'Octavos', icon: '🔥' },
 		{ id: 'quarterfinal', label: 'Cuartos', icon: '⚡' },
 		{ id: 'semifinal', label: 'Semis', icon: '🏆' },

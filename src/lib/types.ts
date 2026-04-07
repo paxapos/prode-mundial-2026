@@ -118,6 +118,7 @@ export interface LeaderboardEntry {
 	userId: string;
 	nickname: string;
 	role: UserRole;
+	avatarUrl: string | null;
 	totalPoints: number;
 	exactHits: number;
 	outcomeHits: number;

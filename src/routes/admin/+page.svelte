@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
 	import { Alert, Badge, Button, Input, Label, Select } from 'flowbite-svelte';
 	import { getFlagUrl, VENUES } from '$lib/teams';
 	import { STAGE_LABELS, defaultScoringConfig } from '$lib/scoring-config';
@@ -685,7 +686,7 @@
 							{#if editingUserId === user.id}
 								<tr class="bg-amber-50/50">
 									<td class="py-2 pl-4" colspan="4">
-										<form method="POST" action="?/editUser" class="flex flex-wrap items-center gap-3" onsubmit={() => { editingUserId = null; }}>
+										<form method="POST" action="?/editUser" class="flex flex-wrap items-center gap-3" use:enhance={() => { return async ({ update }) => { editingUserId = null; await update(); }; }}>
 											<input type="hidden" name="userId" value={user.id} />
 											<div class="flex items-center gap-2">
 												<span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-amber-200 text-xs font-bold text-amber-700">

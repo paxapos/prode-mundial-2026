@@ -377,6 +377,21 @@ async function createTables(): Promise<void> {
 			applied_at TEXT NOT NULL
 		);
 	`);
+	await client.execute(`
+		CREATE TABLE IF NOT EXISTS blog_posts (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			slug TEXT NOT NULL UNIQUE,
+			title TEXT NOT NULL,
+			excerpt TEXT NOT NULL,
+			body TEXT NOT NULL,
+			image_url TEXT,
+			author_id INTEGER NOT NULL,
+			published INTEGER NOT NULL DEFAULT 1,
+			created_at TEXT NOT NULL,
+			updated_at TEXT NOT NULL,
+			FOREIGN KEY(author_id) REFERENCES users(id) ON DELETE CASCADE
+		);
+	`);
 }
 
 async function normalizeSchema(): Promise<void> {

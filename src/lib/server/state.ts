@@ -11,13 +11,15 @@ import type {
 	Tournament,
 	TournamentSettings,
 	User,
-	UserRole
+	UserRole,
+	BlogPost
 } from '$lib/types';
 import { defaultScoringConfig, parseScoringConfig, serializeScoringConfig, getStageConfig } from '$lib/scoring-config';
 import { ensureDatabaseReady } from '$lib/server/bootstrap';
 import { db } from '$lib/server/db/client';
 import {
 	auditLogs,
+	blogPosts,
 	tournaments,
 	tournamentMatches,
 	tournamentPredictions,
@@ -997,4 +999,104 @@ export async function buildLandingData() {
 		groupMatches: matches.filter((m) => m.stage === 'groups'),
 		bracketMatches: matches.filter((m) => m.stage !== 'groups')
 	};
+}
+
+/* ─────────────────────────────────────────────── */
+/* Blog                                            */
+/* ─────────────────────────────────────────────── */
+
+function toBlogPost(row: typeof blogPosts.$inferSelect, authorNickname: string): BlogPost {
+	return {
+		id: String(row.id),
+		slug: row.slug,
+		title: row.title,
+		excerpt: row.excerpt,
+		body: row.body,
+		imageUrl: row.imageUrl ?? null,
+		authorId: String(row.authorId),
+		authorNickname,
+		published: row.published,
+		createdAt: row.createdAt,
+		updatedAt: row.updatedAt
+	};
+}
+
+export async function listPublishedBlogPosts(limit = 10): Promise<BlogPost[]> {
+	const rows = await db
+		.select({
+			post: blogPosts,
+			nickname: users.nickname
+		})
+		.from(blogPosts)
+		.innerJoin(users, eq(blogPosts.authorId, users.id))
+		.where(eq(blogPosts.published, true))
+		.orderBy(asc(blogPosts.createdAt))
+		.limit(limit);
+	return rows.reverse().map((r) => toBlogPost(r.post, r.nickname));
+}
+
+export async function listAllBlogPosts(): Promise<BlogPost[]> {
+	const rows = await db
+		.select({
+			post: blogPosts,
+			nickname: users.nickname
+		})
+		.from(blogPosts)
+		.innerJoin(users, eq(blogPosts.authorId, users.id))
+		.orderBy(asc(blogPosts.createdAt));
+	return rows.reverse().map((r) => toBlogPost(r.post, r.nickname));
+}
+
+export async function getBlogPostBySlug(slug: string): Promise<BlogPost | null> {
+	const rows = await db
+		.select({
+			post: blogPosts,
+			nickname: users.nickname
+		})
+		.from(blogPosts)
+		.innerJoin(users, eq(blogPosts.authorId, users.id))
+		.where(eq(blogPosts.slug, slug))
+		.limit(1);
+	if (!rows.length) return null;
+	return toBlogPost(rows[0].post, rows[0].nickname);
+}
+
+export async function createBlogPost(input: {
+	title: string;
+	excerpt: string;
+	body: string;
+	imageUrl?: string;
+	authorId: number;
+}): Promise<BlogPost> {
+	const title = input.title.trim();
+	if (!title) throw new Error('El título es obligatorio.');
+	const excerpt = input.excerpt.trim();
+	if (!excerpt) throw new Error('La descripción corta es obligatoria.');
+	const body = input.body.trim();
+	if (!body) throw new Error('El contenido es obligatorio.');
+
+	const slug = slugifyAlias(title) + '-' + Date.now().toString(36);
+	const now = new Date().toISOString();
+
+	const [created] = await db
+		.insert(blogPosts)
+		.values({
+			slug,
+			title,
+			excerpt,
+			body,
+			imageUrl: input.imageUrl?.trim() || null,
+			authorId: input.authorId,
+			published: true,
+			createdAt: now,
+			updatedAt: now
+		})
+		.returning();
+
+	const author = await getUserById(String(input.authorId));
+	return toBlogPost(created, author?.nickname ?? 'Admin');
+}
+
+export async function deleteBlogPost(postId: string): Promise<void> {
+	await db.delete(blogPosts).where(eq(blogPosts.id, Number(postId)));
 }

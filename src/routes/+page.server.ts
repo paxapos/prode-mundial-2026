@@ -1,8 +1,11 @@
 import type { PageServerLoad } from './$types';
-import { buildLandingData, listLigas, listUserTournamentIds, getActiveTournament } from '$lib/server/state';
+import { buildLandingData, listLigas, listUserTournamentIds, getActiveTournament, listPublishedBlogPosts } from '$lib/server/state';
 
 export const load: PageServerLoad = async ({ locals }) => {
-	const landing = await buildLandingData();
+	const [landing, blogPosts] = await Promise.all([
+		buildLandingData(),
+		listPublishedBlogPosts(5)
+	]);
 	const source = await getActiveTournament();
 
 	// Load ligas for the user
@@ -16,6 +19,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	return {
 		...landing,
 		ligas: userLigas,
-		user: locals.user
+		user: locals.user,
+		blogPosts
 	};
 };

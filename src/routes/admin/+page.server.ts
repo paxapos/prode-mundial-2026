@@ -4,14 +4,17 @@ import type { SideWinner } from '$lib/types';
 import {
 	addMatch,
 	assignUserToTournament,
+	createBlogPost,
 	createLiga,
 	createTournament,
 	createUserByAdmin,
+	deleteBlogPost,
 	getActiveTournament,
 	getTournamentByAlias,
 	getTournamentById,
 	getScoringRules,
 	getTournamentSettings,
+	listAllBlogPosts,
 	listLigas,
 	listUsers,
 	listMatches,
@@ -47,7 +50,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		users: await listUsers(),
 		tournamentMembers: await listTournamentMembers(selectedTournament.id),
 		rules: await getScoringRules(selectedTournament.id),
-		settings: await getTournamentSettings(selectedTournament.id)
+		settings: await getTournamentSettings(selectedTournament.id),
+		blogPosts: await listAllBlogPosts()
 	};
 };
 
@@ -243,6 +247,38 @@ export const actions: Actions = {
 			return { ok: true };
 		} catch (err) {
 			return fail(400, { message: err instanceof Error ? err.message : 'No se pudo crear liga.' });
+		}
+	},
+	createPost: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') throw error(403, 'Solo administradores.');
+		const data = await request.formData();
+		const title = String(data.get('title') ?? '');
+		const excerpt = String(data.get('excerpt') ?? '');
+		const body = String(data.get('body') ?? '');
+		const imageUrl = String(data.get('imageUrl') ?? '');
+
+		try {
+			await createBlogPost({
+				title,
+				excerpt,
+				body,
+				imageUrl: imageUrl || undefined,
+				authorId: Number(locals.user.id)
+			});
+			return { ok: true };
+		} catch (err) {
+			return fail(400, { message: err instanceof Error ? err.message : 'No se pudo crear el artículo.' });
+		}
+	},
+	deletePost: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') throw error(403, 'Solo administradores.');
+		const data = await request.formData();
+		const postId = String(data.get('postId') ?? '');
+		try {
+			await deleteBlogPost(postId);
+			return { ok: true };
+		} catch (err) {
+			return fail(400, { message: err instanceof Error ? err.message : 'No se pudo eliminar el artículo.' });
 		}
 	}
 };

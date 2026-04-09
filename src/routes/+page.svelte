@@ -103,6 +103,32 @@
 		</div>
 	{/if}
 
+	<!-- La pizarra del DT -->
+	{#if data.blogPosts?.length}
+		<div class="space-y-4">
+			<div class="flex items-center gap-3">
+				<span class="text-2xl">📋</span>
+				<h2 class="text-xl font-black tracking-tight text-slate-900">La Pizarra del DT</h2>
+			</div>
+			<div class="grid gap-4 md:grid-cols-2">
+				{#each data.blogPosts as post}
+					<a href="/blog/{post.slug}" class="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md">
+						{#if post.imageUrl}
+							<img src={post.imageUrl} alt={post.title} class="h-40 w-full object-cover" />
+						{/if}
+						<div class="p-4">
+							<h3 class="font-bold text-slate-800 group-hover:text-sky-600">{post.title}</h3>
+							<p class="mt-1 line-clamp-2 text-sm text-slate-500">{post.excerpt}</p>
+							<p class="mt-2 text-xs text-slate-400">
+								Por <span class="font-semibold">{post.authorNickname}</span> · {new Date(post.createdAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}
+							</p>
+						</div>
+					</a>
+				{/each}
+			</div>
+		</div>
+	{/if}
+
 	<!-- Tab navigation -->
 	<div class="flex gap-2 rounded-xl bg-slate-100 p-1">
 		{#each STAGE_TABS as tab}

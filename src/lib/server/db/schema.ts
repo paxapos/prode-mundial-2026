@@ -126,3 +126,16 @@ export const auditLogs = sqliteTable('audit_logs', {
 	payloadJson: text('payload_json').notNull(),
 	createdAt: text('created_at').notNull()
 });
+
+export const blogPosts = sqliteTable('blog_posts', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	slug: text('slug').notNull().unique(),
+	title: text('title').notNull(),
+	excerpt: text('excerpt').notNull(),
+	body: text('body').notNull(),
+	imageUrl: text('image_url'),
+	authorId: integer('author_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+	published: integer('published', { mode: 'boolean' }).notNull().default(true),
+	createdAt: text('created_at').notNull(),
+	updatedAt: text('updated_at').notNull()
+});

@@ -14,13 +14,14 @@
 	const STAGES: MatchStage[] = ['groups', 'round32', 'round16', 'quarterfinal', 'semifinal', 'final'];
 
 	/* ─── Tabs ─── */
-	type AdminTab = 'torneos' | 'usuarios' | 'resultados' | 'config';
+	type AdminTab = 'torneos' | 'usuarios' | 'resultados' | 'config' | 'blog';
 	let activeTab = $state<AdminTab>('resultados');
 
 	const tabItems: { id: AdminTab; label: string; icon: string }[] = [
 		{ id: 'resultados', label: 'Resultados', icon: '⚽' },
 		{ id: 'torneos', label: 'Ligas', icon: '🏆' },
 		{ id: 'usuarios', label: 'Usuarios', icon: '👥' },
+		{ id: 'blog', label: 'Blog', icon: '📝' },
 		{ id: 'config', label: 'Config', icon: '⚙️' }
 	];
 
@@ -792,6 +793,70 @@
 						</tbody>
 					</table>
 				</div>
+			</div>
+		</div>
+	{/if}
+
+	<!-- ═══════════════════════════════════════════════════ -->
+	<!-- TAB: BLOG                                          -->
+	<!-- ═══════════════════════════════════════════════════ -->
+	{#if activeTab === 'blog'}
+		<div class="space-y-6">
+			<!-- New post form -->
+			<div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+				<h2 class="mb-1 text-lg font-black text-slate-800">✍️ Escribir nueva columna</h2>
+				<p class="mb-4 text-xs text-slate-400">Escribí como si fuera un mail: título, una descripción corta, y el contenido. Podés agregar una imagen de internet copiando su dirección (URL).</p>
+
+				<form method="POST" action="?/createPost" use:enhance class="space-y-4">
+					<div>
+						<label for="post-title" class="mb-1 block text-xs font-bold text-slate-500">Título</label>
+						<input id="post-title" name="title" type="text" required placeholder="Ej: Por qué Scaloni es un genio táctico" class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20" />
+					</div>
+					<div>
+						<label for="post-excerpt" class="mb-1 block text-xs font-bold text-slate-500">Descripción corta (se muestra en la home)</label>
+						<input id="post-excerpt" name="excerpt" type="text" required placeholder="Una o dos oraciones que resuman la columna" class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20" />
+					</div>
+					<div>
+						<label for="post-image" class="mb-1 block text-xs font-bold text-slate-500">Imagen (opcional — pegá la dirección de una imagen de internet)</label>
+						<input id="post-image" name="imageUrl" type="url" placeholder="https://ejemplo.com/foto.jpg" class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20" />
+					</div>
+					<div>
+						<label for="post-body" class="mb-1 block text-xs font-bold text-slate-500">Contenido de la columna</label>
+						<p class="mb-2 text-[11px] text-slate-400">Escribí como en un mail. Dejá una línea en blanco para separar párrafos. Para poner una imagen en el texto, pegá la dirección en una línea sola.</p>
+						<textarea id="post-body" name="body" rows="12" required placeholder="Escribí acá tu columna..." class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm leading-relaxed focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20"></textarea>
+					</div>
+					<button type="submit" class="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-700">
+						📤 Publicar columna
+					</button>
+				</form>
+			</div>
+
+			<!-- Existing posts -->
+			<div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+				<h2 class="mb-4 text-lg font-black text-slate-800">Columnas publicadas</h2>
+				{#if data.blogPosts?.length}
+					<div class="space-y-3">
+						{#each data.blogPosts as post}
+							<div class="flex items-start justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50 p-4">
+								<div class="min-w-0 flex-1">
+									<h3 class="truncate font-bold text-slate-800">{post.title}</h3>
+									<p class="mt-0.5 text-xs text-slate-400">
+										Por {post.authorNickname} · {new Date(post.createdAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', year: 'numeric' })}
+									</p>
+									<p class="mt-1 line-clamp-2 text-sm text-slate-500">{post.excerpt}</p>
+								</div>
+								<form method="POST" action="?/deletePost" use:enhance={() => { return async ({ update }) => { if (confirm('¿Eliminar esta columna?')) await update(); }; }}>
+									<input type="hidden" name="postId" value={post.id} />
+									<button type="submit" class="shrink-0 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-100">
+										🗑️
+									</button>
+								</form>
+							</div>
+						{/each}
+					</div>
+				{:else}
+					<p class="text-center text-sm text-slate-400">No hay columnas publicadas todavía.</p>
+				{/if}
 			</div>
 		</div>
 	{/if}

@@ -122,3 +122,17 @@ export interface LeaderboardEntry {
 	outcomeHits: number;
 	bracketPoints: number;
 }
+
+export interface BlogPost {
+	id: string;
+	slug: string;
+	title: string;
+	excerpt: string;
+	body: string;
+	imageUrl: string | null;
+	authorId: string;
+	authorNickname: string;
+	published: boolean;
+	createdAt: string;
+	updatedAt: string;
+}

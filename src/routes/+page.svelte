@@ -107,8 +107,11 @@
 	{#if data.blogPosts?.length}
 		<div class="space-y-4">
 			<div class="flex items-center gap-3">
-				<span class="text-2xl">📋</span>
-				<h2 class="text-xl font-black tracking-tight text-slate-900">La Pizarra del DT</h2>
+				<img src="/guru-futbol.svg" alt="Gurú Táctico" class="h-9 w-9" />
+				<div>
+					<h2 class="text-xl font-black tracking-tight text-slate-900">La Pizarra del DT</h2>
+					<p class="text-xs text-slate-400">Análisis táctico del Mundial 2026</p>
+				</div>
 			</div>
 			<div class="grid gap-4 md:grid-cols-2">
 				{#each data.blogPosts as post}

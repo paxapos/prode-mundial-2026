@@ -7,6 +7,21 @@
 	const ogImage = $derived(`${$page.url.origin}/og-image.jpg`);
 
 	const STAGES: MatchStage[] = ['groups', 'round32', 'round16', 'quarterfinal', 'semifinal', 'final'];
+
+	let inviteMsg = $state('');
+	async function copyInviteLink() {
+		const url = $page.url.href;
+		const text = `Unite a la liga "${data.tournament.name}" en el Prode Mundial 2026! ${url}`;
+		try {
+			if (navigator.share) {
+				await navigator.share({ title: `Liga ${data.tournament.name}`, text, url });
+			} else {
+				await navigator.clipboard.writeText(text);
+				inviteMsg = '¡Link copiado!';
+				setTimeout(() => { inviteMsg = ''; }, 2500);
+			}
+		} catch { /* user cancelled share */ }
+	}
 </script>
 
 <svelte:head>
@@ -27,9 +42,20 @@
 </svelte:head>
 
 <section class="space-y-8">
-	<div>
-		<h1 class="text-4xl font-black tracking-tight text-slate-900">{data.tournament.name}</h1>
-		<p class="mt-1 text-base text-slate-500">Tabla de posiciones de la liga.</p>
+	<div class="flex flex-wrap items-end justify-between gap-3">
+		<div>
+			<h1 class="text-4xl font-black tracking-tight text-slate-900">{data.tournament.name}</h1>
+			<p class="mt-1 text-base text-slate-500">Tabla de posiciones de la liga.</p>
+		</div>
+		<button
+			onclick={copyInviteLink}
+			class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
+		>
+			📤 Invitar amigos
+		</button>
+		{#if inviteMsg}
+			<span class="text-xs font-bold text-emerald-600">{inviteMsg}</span>
+		{/if}
 	</div>
 
 	<div class="w-full overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -120,6 +146,29 @@
 					<span class="rounded-full bg-orange-100 px-4 py-1.5 text-sm font-bold text-orange-700">🥉 3ro: +{data.tournament.scoringConfig.bonusThird} pts</span>
 				</div>
 			{/if}
+		</div>
+	{/if}
+
+	<!-- La Pizarra del DT (blog) -->
+	{#if data.blogPosts?.length}
+		<div class="space-y-4">
+			<div class="flex items-center gap-3">
+				<img src="/guru-futbol.svg" alt="Gurú Táctico" class="h-8 w-8" />
+				<h2 class="text-lg font-black tracking-tight text-slate-900">La Pizarra del DT</h2>
+			</div>
+			<div class="grid gap-4 md:grid-cols-3">
+				{#each data.blogPosts as post}
+					<a href="/blog/{post.slug}" class="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md">
+						{#if post.imageUrl}
+							<img src={post.imageUrl} alt={post.title} class="h-32 w-full object-cover" />
+						{/if}
+						<div class="p-3">
+							<h3 class="text-sm font-bold text-slate-800 group-hover:text-sky-600">{post.title}</h3>
+							<p class="mt-1 line-clamp-2 text-xs text-slate-500">{post.excerpt}</p>
+						</div>
+					</a>
+				{/each}
+			</div>
 		</div>
 	{/if}
 </section>

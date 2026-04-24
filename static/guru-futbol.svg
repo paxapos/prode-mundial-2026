@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" fill="none">
+  <!-- Background circle -->
+  <circle cx="60" cy="60" r="58" fill="#0f172a" stroke="#334155" stroke-width="2"/>
+  
+  <!-- Tactical board (green pitch) -->
+  <rect x="22" y="38" width="76" height="50" rx="4" fill="#166534" stroke="#22c55e" stroke-width="1.5"/>
+  <!-- Center line -->
+  <line x1="60" y1="38" x2="60" y2="88" stroke="#22c55e" stroke-width="1" opacity="0.6"/>
+  <!-- Center circle -->
+  <circle cx="60" cy="63" r="8" stroke="#22c55e" stroke-width="1" fill="none" opacity="0.6"/>
+  <!-- Penalty areas -->
+  <rect x="22" y="50" width="14" height="26" stroke="#22c55e" stroke-width="1" fill="none" opacity="0.6"/>
+  <rect x="84" y="50" width="14" height="26" stroke="#22c55e" stroke-width="1" fill="none" opacity="0.6"/>
+  
+  <!-- Tactical arrows (strategy lines) -->
+  <!-- Arrow 1: left wing attack -->
+  <path d="M36 72 L48 58 L56 52" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <polygon points="56,49 59,53 53,53" fill="#fbbf24"/>
+  <!-- Arrow 2: through the middle -->
+  <path d="M52 78 L58 68 L64 56" stroke="#f97316" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <polygon points="64,53 67,57 61,57" fill="#f97316"/>
+  <!-- Arrow 3: right flank -->
+  <path d="M74 74 L70 62 L66 54" stroke="#fbbf24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <polygon points="66,51 69,55 63,55" fill="#fbbf24"/>
+  
+  <!-- Player dots (formation markers) -->
+  <!-- Defenders -->
+  <circle cx="36" cy="76" r="3" fill="#60a5fa"/>
+  <circle cx="48" cy="80" r="3" fill="#60a5fa"/>
+  <circle cx="60" cy="82" r="3" fill="#60a5fa"/>
+  <circle cx="72" cy="80" r="3" fill="#60a5fa"/>
+  <circle cx="84" cy="76" r="3" fill="#60a5fa"/>
+  <!-- Midfielders -->
+  <circle cx="42" cy="68" r="3" fill="#34d399"/>
+  <circle cx="60" cy="70" r="3" fill="#34d399"/>
+  <circle cx="78" cy="68" r="3" fill="#34d399"/>
+  <!-- Forwards -->
+  <circle cx="50" cy="56" r="3" fill="#f87171"/>
+  <circle cx="70" cy="56" r="3" fill="#f87171"/>
+  
+  <!-- Guru hat / beret on top -->
+  <ellipse cx="60" cy="26" rx="20" ry="6" fill="#1e293b"/>
+  <path d="M40 26 Q42 14 60 12 Q78 14 80 26" fill="#334155"/>
+  <circle cx="60" cy="12" r="3" fill="#fbbf24"/>
+  
+  <!-- Magnifying glass (analysis symbol) -->
+  <circle cx="90" cy="28" r="10" stroke="#94a3b8" stroke-width="2.5" fill="none"/>
+  <line x1="97" y1="35" x2="104" y2="42" stroke="#94a3b8" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Eye inside magnifier -->
+  <ellipse cx="90" cy="28" rx="5" ry="3" fill="#e2e8f0"/>
+  <circle cx="90" cy="28" r="2" fill="#0f172a"/>
+  
+  <!-- Whistle icon (bottom left accent) -->
+  <circle cx="22" cy="100" r="5" fill="#fbbf24" opacity="0.8"/>
+  <rect x="22" y="97" width="10" height="3" rx="1.5" fill="#fbbf24" opacity="0.8"/>
+  
+  <!-- Stars (expertise) -->
+  <polygon points="16,22 18,18 20,22 16.5,19.5 19.5,19.5" fill="#fbbf24" opacity="0.9"/>
+  <polygon points="14,32 15.5,29 17,32 14.5,30.5 16.5,30.5" fill="#fbbf24" opacity="0.6"/>
+  
+  <!-- Text arc: "GURÚ" -->
+  <text x="60" y="108" text-anchor="middle" font-family="system-ui, sans-serif" font-size="11" font-weight="900" letter-spacing="3" fill="#fbbf24">GURÚ TÁCTICO</text>
+</svg>

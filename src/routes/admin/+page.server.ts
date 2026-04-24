@@ -4,12 +4,14 @@ import type { SideWinner } from '$lib/types';
 import {
 	addMatch,
 	assignUserToTournament,
+	buildGroupStandings,
 	createBlogPost,
 	createLiga,
 	createTournament,
 	createUserByAdmin,
 	deleteBlogPost,
 	getActiveTournament,
+	getGroupAdjustments,
 	getTournamentByAlias,
 	getTournamentById,
 	getScoringRules,
@@ -22,6 +24,7 @@ import {
 	listTournamentMembers,
 	lockTournament,
 	removeUserFromTournament,
+	setGroupAdjustment,
 	setMatchResult,
 	updateMatchTeams,
 	updateScoringRules,
@@ -34,7 +37,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const alias = url.searchParams.get('t');
 	const selectedTournament = alias ? await getTournamentByAlias(alias) : await getActiveTournament();
 	if (!selectedTournament) {
-		return { selectedTournament: null, parentTournament: null, tournaments: [], ligas: [], matches: [], users: [], tournamentMembers: [], rules: null, settings: null };
+		return { selectedTournament: null, parentTournament: null, tournaments: [], ligas: [], matches: [], users: [], tournamentMembers: [], rules: null, settings: null, groupStandings: {}, groupAdjustments: [] };
 	}
 
 	const isLiga = !!selectedTournament.parentTournamentId;
@@ -51,7 +54,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		tournamentMembers: await listTournamentMembers(selectedTournament.id),
 		rules: await getScoringRules(selectedTournament.id),
 		settings: await getTournamentSettings(selectedTournament.id),
-		blogPosts: await listAllBlogPosts()
+		blogPosts: await listAllBlogPosts(),
+		groupStandings: await buildGroupStandings(selectedTournament.id),
+		groupAdjustments: await getGroupAdjustments(selectedTournament.id)
 	};
 };
 
@@ -279,6 +284,36 @@ export const actions: Actions = {
 			return { ok: true };
 		} catch (err) {
 			return fail(400, { message: err instanceof Error ? err.message : 'No se pudo eliminar el artículo.' });
+		}
+	},
+	saveTiebreaker: async ({ request, locals }) => {
+		if (!locals.user || locals.user.role !== 'admin') throw error(403, 'Solo administradores.');
+		const data = await request.formData();
+		const tournamentId = String(data.get('tournamentId') ?? '');
+		const groupCode = String(data.get('groupCode') ?? '');
+		const team = String(data.get('team') ?? '');
+		const tiebreakerPoints = Number(data.get('tiebreakerPoints') ?? 0);
+		const reason = String(data.get('reason') ?? '');
+
+		if (!tournamentId || !groupCode || !team) {
+			return fail(400, { message: 'Faltan datos obligatorios.' });
+		}
+		if (!Number.isFinite(tiebreakerPoints)) {
+			return fail(400, { message: 'Puntos de desempate inválidos.' });
+		}
+
+		try {
+			await setGroupAdjustment({
+				tournamentId,
+				groupCode,
+				team,
+				tiebreakerPoints,
+				reason: reason || undefined,
+				actorUserId: locals.user.id
+			});
+			return { ok: true };
+		} catch (err) {
+			return fail(400, { message: err instanceof Error ? err.message : 'No se pudo guardar desempate.' });
 		}
 	}
 };

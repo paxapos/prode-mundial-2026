@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
 	import { Alert, Button, Input, Label } from 'flowbite-svelte';
 
 	let { data, form } = $props();
@@ -30,7 +31,7 @@
 			</div>
 		</div>
 
-		<form method="POST" class="space-y-4">
+		<form method="POST" use:enhance class="space-y-4">
 			<div>
 				<Label for="nickname" class="mb-1.5 text-xs font-bold text-slate-500">Nickname</Label>
 				<Input

@@ -392,6 +392,19 @@ async function createTables(): Promise<void> {
 			FOREIGN KEY(author_id) REFERENCES users(id) ON DELETE CASCADE
 		);
 	`);
+	await client.execute(`
+		CREATE TABLE IF NOT EXISTS team_group_adjustments (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			tournament_id TEXT NOT NULL,
+			group_code TEXT NOT NULL,
+			team TEXT NOT NULL,
+			tiebreaker_points INTEGER NOT NULL DEFAULT 0,
+			reason TEXT,
+			created_at TEXT NOT NULL,
+			FOREIGN KEY(tournament_id) REFERENCES tournaments(id) ON DELETE CASCADE,
+			UNIQUE(tournament_id, group_code, team)
+		);
+	`);
 }
 
 async function normalizeSchema(): Promise<void> {

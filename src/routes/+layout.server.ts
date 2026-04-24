@@ -1,10 +1,8 @@
 import type { LayoutServerLoad } from './$types';
-import { ensureDatabaseReady } from '$lib/server/bootstrap';
 import { getActiveTournament, getTournamentSettings, listLigas, listUserTournamentIds } from '$lib/server/state';
 
 export const load: LayoutServerLoad = async ({ locals }) => {
 	try {
-		await ensureDatabaseReady();
 		const activeTournament = await getActiveTournament();
 
 		// List only ligas (child tournaments) the user is enrolled in

@@ -15,11 +15,11 @@ import type {
 	BlogPost
 } from '$lib/types';
 import { defaultScoringConfig, parseScoringConfig, serializeScoringConfig, getStageConfig } from '$lib/scoring-config';
-import { ensureDatabaseReady } from '$lib/server/bootstrap';
 import { db } from '$lib/server/db/client';
 import {
 	auditLogs,
 	blogPosts,
+	teamGroupAdjustments,
 	tournaments,
 	tournamentMatches,
 	tournamentPredictions,
@@ -143,7 +143,6 @@ async function createAuditLog(input: { userId?: number | null; action: string; e
 }
 
 async function createUserInternal(input: { email: string; password: string; nickname?: string; role: UserRole }): Promise<User> {
-	await ensureDatabaseReady();
 	const email = assertEmail(input.email);
 	const password = assertPassword(input.password);
 	const nickname = input.nickname ? assertNickname(input.nickname) : email.split('@')[0] ?? email;
@@ -172,20 +171,17 @@ async function createUserInternal(input: { email: string; password: string; nick
 }
 
 export async function getUserById(userId: string | null | undefined): Promise<User | null> {
-	await ensureDatabaseReady();
 	if (!userId) return null;
 	const [row] = await db.select().from(users).where(eq(users.id, Number(userId))).limit(1);
 	return row ? toUser(row) : null;
 }
 
 export async function getUserByNickname(nickname: string): Promise<User | null> {
-	await ensureDatabaseReady();
 	const [row] = await db.select().from(users).where(eq(users.nickname, nickname)).limit(1);
 	return row ? toUser(row) : null;
 }
 
 export async function getUserCount(): Promise<number> {
-	await ensureDatabaseReady();
 	const [{ value }] = await db.select({ value: count() }).from(users);
 	return value;
 }
@@ -196,7 +192,6 @@ export async function bootstrapFirstAdmin(input: { email: string; password: stri
 }
 
 export async function authenticateUser(input: { email: string; password: string }): Promise<User> {
-	await ensureDatabaseReady();
 	const email = assertEmail(input.email);
 	const password = assertPassword(input.password);
 	const [row] = await db.select().from(users).where(eq(users.username, email)).limit(1);
@@ -205,8 +200,6 @@ export async function authenticateUser(input: { email: string; password: string 
 }
 
 export async function findOrCreateGoogleUser(input: { googleId: string; email: string; name: string; avatarUrl?: string }): Promise<{ user: User; isNew: boolean }> {
-	await ensureDatabaseReady();
-
 	// Look up by googleId first
 	const [byGoogleId] = await db.select().from(users).where(eq(users.googleId, input.googleId)).limit(1);
 	if (byGoogleId) return { user: toUser(byGoogleId), isNew: false };
@@ -275,7 +268,6 @@ export async function registerUser(input: { email: string; password: string; nic
 }
 
 export async function updateUserByAdmin(input: { userId: string; nickname: string; role: UserRole; actorUserId: string }): Promise<User> {
-	await ensureDatabaseReady();
 	const id = Number(input.userId);
 	const [existing] = await db.select().from(users).where(eq(users.id, id)).limit(1);
 	if (!existing) throw new Error('Usuario no encontrado.');
@@ -298,7 +290,6 @@ export async function updateUserByAdmin(input: { userId: string; nickname: strin
 }
 
 export async function updateOwnProfile(input: { userId: string; nickname: string }): Promise<User> {
-	await ensureDatabaseReady();
 	const id = Number(input.userId);
 	const [existing] = await db.select().from(users).where(eq(users.id, id)).limit(1);
 	if (!existing) throw new Error('Usuario no encontrado.');
@@ -313,25 +304,21 @@ export async function updateOwnProfile(input: { userId: string; nickname: string
 }
 
 export async function listUsers(): Promise<User[]> {
-	await ensureDatabaseReady();
 	const rows = await db.select().from(users).orderBy(asc(users.username));
 	return rows.map(toUser);
 }
 
 export async function listTournaments(): Promise<Tournament[]> {
-	await ensureDatabaseReady();
 	const rows = await db.select().from(tournaments).orderBy(asc(tournaments.createdAt));
 	return rows.map(toTournament);
 }
 
 export async function getTournamentByAlias(alias: string): Promise<Tournament | null> {
-	await ensureDatabaseReady();
 	const [row] = await db.select().from(tournaments).where(eq(tournaments.alias, alias)).limit(1);
 	return row ? toTournament(row) : null;
 }
 
 export async function getActiveTournament(): Promise<Tournament | null> {
-	await ensureDatabaseReady();
 	const rows = await db.select().from(tournaments).where(isNull(tournaments.parentTournamentId)).orderBy(asc(tournaments.createdAt));
 	if (rows.length === 0) return null;
 	// Return the first root tournament (the competition, e.g. Mundial 2026)
@@ -340,7 +327,6 @@ export async function getActiveTournament(): Promise<Tournament | null> {
 
 /** List only ligas (child tournaments that share a parent's matches) */
 export async function listLigas(parentId?: string): Promise<Tournament[]> {
-	await ensureDatabaseReady();
 	const condition = parentId
 		? eq(tournaments.parentTournamentId, parentId)
 		: isNotNull(tournaments.parentTournamentId);
@@ -355,7 +341,6 @@ export async function createLiga(input: {
 	parentTournamentId: string;
 	actorUserId?: string;
 }): Promise<Tournament> {
-	await ensureDatabaseReady();
 	const name = input.name.trim();
 	if (name.length < 3) throw new Error('La liga debe tener al menos 3 caracteres.');
 	const alias = slugifyAlias(input.alias?.trim() || name);
@@ -407,7 +392,6 @@ export async function createTournament(input: {
 	scoringConfig?: ScoringConfig;
 	actorUserId?: string;
 }): Promise<Tournament> {
-	await ensureDatabaseReady();
 	const name = input.name.trim();
 	if (name.length < 3) throw new Error('El torneo debe tener al menos 3 caracteres.');
 	const alias = slugifyAlias(input.alias?.trim() || name);
@@ -447,7 +431,6 @@ export async function createTournament(input: {
 }
 
 export async function assignUserToTournament(input: { userId: string; tournamentId: string; actorUserId?: string }): Promise<void> {
-	await ensureDatabaseReady();
 	const [exists] = await db
 		.select()
 		.from(userTournaments)
@@ -486,13 +469,11 @@ export async function assignUserToTournament(input: { userId: string; tournament
 }
 
 export async function listUserTournamentIds(userId: string): Promise<string[]> {
-	await ensureDatabaseReady();
 	const rows = await db.select({ tournamentId: userTournaments.tournamentId }).from(userTournaments).where(eq(userTournaments.userId, Number(userId)));
 	return rows.map((r) => r.tournamentId);
 }
 
 export async function listTournamentMembers(tournamentId: string): Promise<User[]> {
-	await ensureDatabaseReady();
 	const rows = await db
 		.select({ user: users })
 		.from(userTournaments)
@@ -503,7 +484,6 @@ export async function listTournamentMembers(tournamentId: string): Promise<User[
 }
 
 export async function removeUserFromTournament(input: { userId: string; tournamentId: string; actorUserId: string }): Promise<void> {
-	await ensureDatabaseReady();
 	await db
 		.delete(userTournaments)
 		.where(and(eq(userTournaments.userId, Number(input.userId)), eq(userTournaments.tournamentId, input.tournamentId)));
@@ -523,7 +503,6 @@ async function isTournamentLocked(tournament: Tournament): Promise<boolean> {
 }
 
 export async function listMatches(tournamentId: string): Promise<Match[]> {
-	await ensureDatabaseReady();
 	// If this is a liga (has parent), get matches from the parent (source)
 	const tournament = await getTournamentById(tournamentId);
 	const sourceId = tournament ? getSourceId(tournament) : tournamentId;
@@ -536,7 +515,6 @@ export async function listMatches(tournamentId: string): Promise<Match[]> {
 }
 
 export async function listPredictionsForUser(userId: string, tournamentId: string): Promise<Prediction[]> {
-	await ensureDatabaseReady();
 	// Predictions are always stored against the source tournament
 	const tournament = await getTournamentById(tournamentId);
 	const sourceId = tournament ? getSourceId(tournament) : tournamentId;
@@ -555,7 +533,6 @@ export async function savePrediction(input: {
 	predB: number;
 	predPenaltyWinner: SideWinner;
 }): Promise<Prediction> {
-	await ensureDatabaseReady();
 	const tournament = await getTournamentById(input.tournamentId);
 	if (!tournament) throw new Error('Liga inexistente.');
 	const sourceId = getSourceId(tournament);
@@ -619,7 +596,6 @@ export async function setMatchResult(input: {
 	penaltyWinner: SideWinner;
 	actorUserId?: string;
 }): Promise<Match> {
-	await ensureDatabaseReady();
 	if (input.scoreA < 0 || input.scoreB < 0) throw new Error('El resultado real no puede tener goles negativos.');
 
 	// Knockout ties require a penalty winner
@@ -647,7 +623,6 @@ export async function setMatchResult(input: {
 }
 
 export async function getTournamentById(tournamentId: string): Promise<Tournament | null> {
-	await ensureDatabaseReady();
 	const [row] = await db.select().from(tournaments).where(eq(tournaments.id, tournamentId)).limit(1);
 	return row ? toTournament(row) : null;
 }
@@ -665,7 +640,6 @@ export async function updateScoringRules(input: {
 	scoringConfig: ScoringConfig;
 	actorUserId?: string;
 }): Promise<ScoringConfig> {
-	await ensureDatabaseReady();
 
 	const [updated] = await db
 		.update(tournaments)
@@ -700,7 +674,6 @@ export async function getTournamentSettings(tournamentId: string): Promise<Tourn
 }
 
 export async function lockTournament(tournamentId: string, reason: string, actorUserId?: string): Promise<TournamentSettings> {
-	await ensureDatabaseReady();
 	const [updated] = await db
 		.update(tournaments)
 		.set({ state: 'locked', lockReason: reason || 'Bloqueo manual por administracion.' })
@@ -720,7 +693,6 @@ export async function lockTournament(tournamentId: string, reason: string, actor
 }
 
 export async function getLeaderboard(tournamentId: string): Promise<LeaderboardEntry[]> {
-	await ensureDatabaseReady();
 	const tournament = await getTournamentById(tournamentId);
 	if (!tournament) throw new Error('Liga inexistente.');
 	const sourceId = getSourceId(tournament);
@@ -786,7 +758,6 @@ export async function getLeaderboard(tournamentId: string): Promise<LeaderboardE
 
 /** Get per-match point breakdown for a specific user */
 export async function getPlayerMatchDetails(userId: string, tournamentId: string): Promise<MatchPointDetail[]> {
-	await ensureDatabaseReady();
 	const tournament = await getTournamentById(tournamentId);
 	if (!tournament) return [];
 	const sourceId = getSourceId(tournament);
@@ -861,7 +832,6 @@ export async function updateMatchTeams(input: {
 	teamB: string;
 	actorUserId?: string;
 }): Promise<Match> {
-	await ensureDatabaseReady();
 	const [updated] = await db
 		.update(tournamentMatches)
 		.set({ teamA: input.teamA.trim(), teamB: input.teamB.trim() })
@@ -890,7 +860,6 @@ export async function addMatch(input: {
 	venue?: string;
 	actorUserId?: string;
 }): Promise<Match> {
-	await ensureDatabaseReady();
 	const id = randomUUID();
 	const [created] = await db
 		.insert(tournamentMatches)
@@ -926,13 +895,26 @@ export async function buildGroupStandings(tournamentId: string): Promise<Record<
 	const groupMatches = matches.filter((m) => m.groupCode && m.stage === 'groups');
 	const tables = new Map<string, Map<string, GroupStandingRow>>();
 
+	// Load tiebreaker adjustments
+	const adjustments = await db
+		.select()
+		.from(teamGroupAdjustments)
+		.where(eq(teamGroupAdjustments.tournamentId, tournamentId));
+	const adjustmentMap = new Map<string, number>();
+	for (const adj of adjustments) {
+		adjustmentMap.set(`${adj.groupCode}::${adj.team}`, adj.tiebreakerPoints);
+	}
+
 	for (const match of groupMatches) {
 		const group = match.groupCode ?? 'NA';
 		if (!tables.has(group)) tables.set(group, new Map<string, GroupStandingRow>());
 		const table = tables.get(group)!;
 		for (const team of [match.teamA, match.teamB]) {
 			if (!table.has(team)) {
-				table.set(team, { team, played: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDiff: 0, points: 0 });
+				table.set(team, {
+					team, played: 0, wins: 0, draws: 0, losses: 0, goalsFor: 0, goalsAgainst: 0, goalDiff: 0, points: 0,
+					tiebreakerPoints: adjustmentMap.get(`${group}::${team}`) ?? 0
+				});
 			}
 		}
 
@@ -969,10 +951,56 @@ export async function buildGroupStandings(tournamentId: string): Promise<Record<
 		result[group] = [...rows.values()].sort((x, y) => {
 			if (y.points !== x.points) return y.points - x.points;
 			if (y.goalDiff !== x.goalDiff) return y.goalDiff - x.goalDiff;
-			return y.goalsFor - x.goalsFor;
+			if (y.goalsFor !== x.goalsFor) return y.goalsFor - x.goalsFor;
+			return y.tiebreakerPoints - x.tiebreakerPoints;
 		});
 	}
 	return result;
+}
+
+/* ─── Tiebreaker adjustments ─── */
+
+export async function getGroupAdjustments(tournamentId: string) {
+	return db
+		.select()
+		.from(teamGroupAdjustments)
+		.where(eq(teamGroupAdjustments.tournamentId, tournamentId));
+}
+
+export async function setGroupAdjustment(input: {
+	tournamentId: string;
+	groupCode: string;
+	team: string;
+	tiebreakerPoints: number;
+	reason?: string;
+	actorUserId: string;
+}) {
+	const now = new Date().toISOString();
+	await db
+		.insert(teamGroupAdjustments)
+		.values({
+			tournamentId: input.tournamentId,
+			groupCode: input.groupCode,
+			team: input.team,
+			tiebreakerPoints: input.tiebreakerPoints,
+			reason: input.reason || null,
+			createdAt: now
+		})
+		.onConflictDoUpdate({
+			target: [teamGroupAdjustments.tournamentId, teamGroupAdjustments.groupCode, teamGroupAdjustments.team],
+			set: {
+				tiebreakerPoints: input.tiebreakerPoints,
+				reason: input.reason || null
+			}
+		});
+
+	await createAuditLog({
+		userId: Number(input.actorUserId),
+		action: 'tiebreaker_set',
+		entityType: 'team_group_adjustment',
+		entityId: `${input.tournamentId}::${input.groupCode}::${input.team}`,
+		payload: { tiebreakerPoints: input.tiebreakerPoints, reason: input.reason }
+	});
 }
 
 export async function buildLandingData() {

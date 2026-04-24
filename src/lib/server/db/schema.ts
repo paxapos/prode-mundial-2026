@@ -127,6 +127,22 @@ export const auditLogs = sqliteTable('audit_logs', {
 	createdAt: text('created_at').notNull()
 });
 
+export const teamGroupAdjustments = sqliteTable(
+	'team_group_adjustments',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		tournamentId: text('tournament_id').notNull().references(() => tournaments.id, { onDelete: 'cascade' }),
+		groupCode: text('group_code').notNull(),
+		team: text('team').notNull(),
+		tiebreakerPoints: integer('tiebreaker_points', { mode: 'number' }).notNull().default(0),
+		reason: text('reason'),
+		createdAt: text('created_at').notNull()
+	},
+	(table) => ({
+		uniqueTeamGroupIdx: uniqueIndex('team_group_adjustments_unique_idx').on(table.tournamentId, table.groupCode, table.team)
+	})
+);
+
 export const blogPosts = sqliteTable('blog_posts', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 	slug: text('slug').notNull().unique(),

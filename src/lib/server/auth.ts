@@ -26,7 +26,6 @@ function cookieOptions() {
 }
 
 export async function createSession(cookies: Cookies, userId: string): Promise<void> {
-	await ensureDatabaseReady();
 	const rawToken = generateSessionToken();
 	const now = Date.now();
 	const expiresAt = new Date(now + sessionMaxAge() * 1000).toISOString();
@@ -43,7 +42,6 @@ export async function createSession(cookies: Cookies, userId: string): Promise<v
 }
 
 export async function clearSessionCookie(cookies: Cookies): Promise<void> {
-	await ensureDatabaseReady();
 	const rawToken = cookies.get(SESSION_COOKIE);
 	if (rawToken) {
 		await db.delete(sessions).where(eq(sessions.tokenHash, hashSessionToken(rawToken)));

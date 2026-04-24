@@ -110,6 +110,8 @@ export interface GroupStandingRow {
 	goalsAgainst: number;
 	goalDiff: number;
 	points: number;
+	/** Manual tiebreaker points set by admin (fair play, drawing lots, etc.) */
+	tiebreakerPoints: number;
 }
 
 export interface LeaderboardEntry {

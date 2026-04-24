@@ -36,7 +36,8 @@ export function calcStandings(
 					goalsFor: 0,
 					goalsAgainst: 0,
 					goalDiff: 0,
-					points: 0
+					points: 0,
+					tiebreakerPoints: 0
 				});
 		}
 
@@ -166,11 +167,12 @@ function resolveBestThirds(
 
 	if (thirds.length < 8) return new Map();
 
-	// Rank by points → goal difference → goals scored
+	// Rank by points → goal difference → goals scored → group name (stability)
 	thirds.sort((a, b) => {
 		if (b.row.points !== a.row.points) return b.row.points - a.row.points;
 		if (b.row.goalDiff !== a.row.goalDiff) return b.row.goalDiff - a.row.goalDiff;
-		return b.row.goalsFor - a.row.goalsFor;
+		if (b.row.goalsFor !== a.row.goalsFor) return b.row.goalsFor - a.row.goalsFor;
+		return a.group.localeCompare(b.group);
 	});
 
 	const best8 = new Set(thirds.slice(0, 8).map((t) => t.group));

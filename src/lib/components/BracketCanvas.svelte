@@ -114,11 +114,9 @@
 	let basePositions = new Map<string, { baseX: number; y: number; z: number; baseY: number }>();
 	let connGroup = new THREE.Group();
 	let glowMesh: THREE.Mesh;
-	let canvasH = 600;
 
 	// ── Compute base positions ──
 	function computeBasePositions(cw: number, ch: number): void {
-		canvasH = ch;
 		const aspect = cw / ch;
 
 		// Uniform gap: same spacing between card edges in X and Y

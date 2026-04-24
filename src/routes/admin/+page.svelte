@@ -11,6 +11,9 @@
 	let scoringConfig: ScoringConfig = $state(
 		data.rules ? structuredClone(data.rules) : defaultScoringConfig()
 	);
+	$effect(() => {
+		scoringConfig = data.rules ? structuredClone(data.rules) : defaultScoringConfig();
+	});
 	const STAGES: MatchStage[] = ['groups', 'round32', 'round16', 'quarterfinal', 'semifinal', 'final'];
 
 	/* ─── Tabs ─── */
@@ -377,6 +380,59 @@
 						</div>
 					</div>
 				{/each}
+			</div>
+		{/if}
+
+		<!-- ─── Tiebreaker adjustments ─── -->
+		{#if Object.keys(data.groupStandings).length > 0}
+			<div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+				<h2 class="mb-1 text-lg font-black text-slate-800">⚖️ Desempate manual por grupo</h2>
+				<p class="mb-4 text-xs text-slate-400">
+					Asigná puntos de desempate para resolver empates en fase de grupos (fair play, sorteo FIFA, historial, etc.).
+					A mayor puntaje, más arriba queda el equipo cuando hay igualdad en puntos, diferencia de gol y goles a favor.
+				</p>
+
+				<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+					{#each Object.entries(data.groupStandings).sort(([a], [b]) => a.localeCompare(b)) as [group, rows]}
+						<div class="rounded-lg border border-slate-100 bg-slate-50 p-3">
+							<h3 class="mb-2 text-sm font-black text-slate-700">Grupo {group}</h3>
+							<div class="space-y-2">
+								{#each rows as row}
+									{@const existing = data.groupAdjustments.find(a => a.groupCode === group && a.team === row.team)}
+									<form method="POST" action="?/saveTiebreaker" use:enhance class="flex items-center gap-2">
+										<input type="hidden" name="tournamentId" value={data.selectedTournament?.id} />
+										<input type="hidden" name="groupCode" value={group} />
+										<input type="hidden" name="team" value={row.team} />
+										<div class="flex items-center gap-1.5 flex-1 min-w-0">
+											{#if getFlagUrl(row.team)}
+												<img src={getFlagUrl(row.team, 24)} alt={row.team} class="h-4 w-6 shrink-0 rounded object-cover" />
+											{/if}
+											<span class="truncate text-xs font-semibold text-slate-700">{row.team}</span>
+											<span class="text-[10px] text-slate-400">({row.points}pts {row.goalDiff > 0 ? '+' : ''}{row.goalDiff}dg)</span>
+										</div>
+										<input
+											name="tiebreakerPoints"
+											type="number"
+											step="1"
+											value={existing?.tiebreakerPoints ?? 0}
+											class="w-16 rounded border border-slate-200 bg-white px-1.5 py-1 text-center text-xs font-bold focus:border-sky-400 focus:ring-1 focus:ring-sky-400/20"
+										/>
+										<input
+											name="reason"
+											type="text"
+											placeholder="Motivo"
+											value={existing?.reason ?? ''}
+											class="w-24 rounded border border-slate-200 bg-white px-1.5 py-1 text-xs focus:border-sky-400 focus:ring-1 focus:ring-sky-400/20"
+										/>
+										<button type="submit" class="shrink-0 rounded bg-slate-200 px-2 py-1 text-[10px] font-bold text-slate-600 hover:bg-slate-300">
+											💾
+										</button>
+									</form>
+								{/each}
+							</div>
+						</div>
+					{/each}
+				</div>
 			</div>
 		{/if}
 	{/if}

@@ -14,37 +14,28 @@ El sistema de puntuación es **100% configurable por torneo** desde el panel de 
 
 ### Puntuación por fase
 
-Cada fase del torneo tiene 4 parámetros configurables:
+Cada fase del torneo tiene estos parámetros aplicados por el cálculo automático:
 
 | Concepto | Descripción |
 |---|---|
 | **Resultado (outcome)** | Acertar quién gana o si hay empate (1/X/2) |
-| **Resultado exacto (exact)** | Acertar el marcador exacto (goles de ambos equipos) |
-| **Equipo en llave (bracketTeam)** | Bonus por tener al equipo correcto en esa instancia de eliminación |
-| **Equipo lado incorrecto (bracketTeamWrongSide)** | Bonus reducido si el equipo está en la fase pero por otra llave |
+| **Resultado exacto (exact)** | Acertar el marcador exacto; suma este bonus además del outcome |
+| **Equipo que avanza (bracketTeam)** | Bonus de eliminación directa cuando el pronóstico acierta el equipo que pasa de ronda |
 
 ### Valores por defecto (basados en Qatar 2022 "Paxapoga")
 
-| Fase | Resultado | R. Exacto | Eq. en llave | Eq. lado incorrecto |
-|---|:---:|:---:|:---:|:---:|
-| Grupos | 1 | 1 | — | — |
-| 32avos | 1 | 1 | 2 | 1 |
-| Octavos | 1 | 1 | 3 | 1 |
-| Cuartos | 1 | 1 | 4 | 2 |
-| Semifinales | 1 | 1 | 5 | 2 |
-| Final | 1 | 1 | 6 | 3 |
-
-### Bonus por posición final
-
-| Posición | Puntos |
-|---|:---:|
-| 🥇 Campeón | 10 |
-| 🥈 Subcampeón | 6 |
-| 🥉 Tercero | 5 |
+| Fase | Resultado | R. Exacto | Equipo que avanza |
+|---|:---:|:---:|:---:|
+| Grupos | 1 | 2 | — |
+| Ronda de 32 | 1 | 2 | 2 |
+| Octavos | 1 | 2 | 3 |
+| Cuartos | 1 | 2 | 4 |
+| Semifinales | 1 | 2 | 5 |
+| Final | 1 | 2 | 6 |
 
 ### Desempate
 - Desempate 1: mayor cantidad de resultados exactos.
-- Desempate 2: mayor cantidad de puntos de bracket.
+- Desempate 2: mayor cantidad de aciertos de resultado no exacto.
 
 ## 2) Participantes
 
@@ -106,25 +97,54 @@ Clasifican 32 equipos:
 - 1 y 2 de cada grupo (24 equipos).
 - Los 8 mejores terceros.
 
+#### Criterios FIFA para ordenar grupos
+
+Si dos o más equipos terminan empatados en puntos dentro de un grupo, se ordenan por:
+
+1. Puntos obtenidos en los partidos entre los equipos empatados.
+2. Diferencia de goles en los partidos entre los equipos empatados.
+3. Goles marcados en los partidos entre los equipos empatados.
+4. Diferencia de goles en todos los partidos del grupo.
+5. Goles marcados en todos los partidos del grupo.
+6. Conducta del equipo (fair play).
+7. Última Clasificación Mundial Masculina FIFA/Coca-Cola publicada.
+
+La app calcula automáticamente los criterios deportivos. El admin puede cargar el desempate manual para conducta/ranking FIFA; si queda un empate que afecta 1°, 2°, 3° o 4° del grupo, la llave no se sincroniza hasta resolverlo.
+
+#### Criterios FIFA para los ocho mejores terceros
+
+Los terceros se comparan entre grupos por:
+
+1. Puntos obtenidos en todos los partidos de grupo.
+2. Diferencia de goles en todos los partidos de grupo.
+3. Goles marcados en todos los partidos de grupo.
+4. Conducta del equipo (fair play).
+5. Última Clasificación Mundial Masculina FIFA/Coca-Cola publicada.
+
+La app usa el mismo desempate manual para los criterios 4 y 5, y no sincroniza la ronda de 32 si sigue empatado el corte entre el 8° y 9° mejor tercero.
+
 #### Ronda de 32 (dieciseisavos)
 
-La organizacion de cruces busca evitar que equipos del mismo grupo se crucen temprano.
+Los cruces base oficiales son:
 
-Llave superior (referencia de cruces):
-- Ganador Grupo A vs 3 C/E/F.
-- Ganador Grupo B vs 3 A/C/D.
-- Ganador Grupo E vs 2 Grupo F.
-- Ganador Grupo F vs 2 Grupo E.
-- Ganador Grupo I vs 3 G/H/J.
-- Ganador Grupo J vs 2 Grupo I.
+- 2° Grupo A vs 2° Grupo B.
+- 1° Grupo E vs 3° Grupo A/B/C/D/F.
+- 1° Grupo F vs 2° Grupo C.
+- 1° Grupo C vs 2° Grupo F.
+- 1° Grupo I vs 3° Grupo C/D/F/G/H.
+- 2° Grupo E vs 2° Grupo I.
+- 1° Grupo A vs 3° Grupo C/E/F/H/I.
+- 1° Grupo L vs 3° Grupo E/H/I/J/K.
+- 1° Grupo D vs 3° Grupo B/E/F/I/J.
+- 1° Grupo G vs 3° Grupo A/E/H/I/J.
+- 2° Grupo K vs 2° Grupo L.
+- 1° Grupo H vs 2° Grupo J.
+- 1° Grupo B vs 3° Grupo E/F/G/I/J.
+- 1° Grupo J vs 2° Grupo H.
+- 1° Grupo K vs 3° Grupo D/E/I/J/L.
+- 2° Grupo D vs 2° Grupo G.
 
-Llave inferior (referencia de cruces):
-- Ganador Grupo C vs 2 Grupo D.
-- Ganador Grupo D vs 3 B/E/F.
-- Ganador Grupo G vs 3 I/J/L.
-- Ganador Grupo H vs 2 Grupo G.
-- Ganador Grupo K vs 2 Grupo L.
-- Ganador Grupo L vs 2 Grupo K.
+La asignación de qué tercero va a cada cruce no se calcula con un matching genérico: sigue la tabla FIFA Annex C con las 495 combinaciones posibles de grupos terceros clasificados.
 
 #### Octavos de final
 - Juegan los 16 ganadores de la ronda de 32.

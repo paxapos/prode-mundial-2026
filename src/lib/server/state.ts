@@ -14,6 +14,18 @@ import type {
 	UserRole,
 	BlogPost
 } from '$lib/types';
+import {
+	compareThirdPlaceMetrics,
+	FLOW,
+	getMatchOutcome,
+	hasUnresolvedGroupBoundaryTie,
+	rankThirdPlacedGroups,
+	R32_DEFS,
+	resolveBestThirds,
+	resolveWinner,
+	sortGroupStandingRows,
+	teamAt
+} from '$lib/bracket-rules';
 import { defaultScoringConfig, parseScoringConfig, serializeScoringConfig, getStageConfig } from '$lib/scoring-config';
 import { db } from '$lib/server/db/client';
 import {
@@ -124,13 +136,6 @@ function toPrediction(row: typeof tournamentPredictions.$inferSelect): Predictio
 	};
 }
 
-function getOutcome(a: number, b: number, stage: Match['stage'], penaltyWinner: SideWinner): 'A' | 'B' | 'draw' {
-	if (a > b) return 'A';
-	if (b > a) return 'B';
-	if (stage !== 'groups' && penaltyWinner) return penaltyWinner;
-	return 'draw';
-}
-
 async function createAuditLog(input: { userId?: number | null; action: string; entityType: string; entityId: string; payload: unknown }) {
 	await db.insert(auditLogs).values({
 		userId: input.userId ?? null,
@@ -140,6 +145,67 @@ async function createAuditLog(input: { userId?: number | null; action: string; e
 		payloadJson: JSON.stringify(input.payload),
 		createdAt: new Date().toISOString()
 	});
+}
+
+type PredictionPointResult = MatchPointDetail & {
+	exactHit: boolean;
+	outcomeHit: boolean;
+};
+
+function calculatePredictionPoints(prediction: Prediction, match: Match, config: ScoringConfig): PredictionPointResult | null {
+	if (match.scoreA === null || match.scoreB === null) return null;
+
+	const stageConfig = getStageConfig(config, match.stage);
+	const predictedOutcome = getMatchOutcome(prediction.predA, prediction.predB, match.stage, prediction.predPenaltyWinner);
+	const actualOutcome = getMatchOutcome(match.scoreA, match.scoreB, match.stage, match.penaltyWinner);
+	const exactScore = prediction.predA === match.scoreA && prediction.predB === match.scoreB;
+	const exactPenaltyWinner = match.stage === 'groups' || match.scoreA !== match.scoreB || prediction.predPenaltyWinner === match.penaltyWinner;
+	const exactHit = exactScore && exactPenaltyWinner;
+	const outcomeHit = !exactHit && predictedOutcome === actualOutcome;
+	const outcomePoints = exactHit || outcomeHit ? stageConfig.outcome : 0;
+	const exactPoints = exactHit ? stageConfig.exact : 0;
+	const bracketPoints = match.stage !== 'groups' && predictedOutcome === actualOutcome ? stageConfig.bracketTeam : 0;
+	const reason = exactHit
+		? 'Resultado exacto'
+		: outcomeHit
+			? 'Acierto de resultado'
+			: 'No acertó';
+
+	return {
+		matchId: match.id,
+		stage: match.stage,
+		teamA: match.teamA,
+		teamB: match.teamB,
+		scoreA: match.scoreA,
+		scoreB: match.scoreB,
+		predA: prediction.predA,
+		predB: prediction.predB,
+		outcomePoints,
+		exactPoints,
+		bracketPoints,
+		totalPoints: outcomePoints + exactPoints + bracketPoints,
+		reason: bracketPoints > 0 ? `${reason} + equipo avanza (${bracketPoints}pts)` : reason,
+		exactHit,
+		outcomeHit
+	};
+}
+
+function toMatchPointDetail(points: PredictionPointResult): MatchPointDetail {
+	return {
+		matchId: points.matchId,
+		stage: points.stage,
+		teamA: points.teamA,
+		teamB: points.teamB,
+		scoreA: points.scoreA,
+		scoreB: points.scoreB,
+		predA: points.predA,
+		predB: points.predB,
+		outcomePoints: points.outcomePoints,
+		exactPoints: points.exactPoints,
+		bracketPoints: points.bracketPoints,
+		totalPoints: points.totalPoints,
+		reason: points.reason
+	};
 }
 
 async function createUserInternal(input: { email: string; password: string; nickname?: string; role: UserRole }): Promise<User> {
@@ -384,6 +450,88 @@ function getSourceId(tournament: Tournament): string {
 	return tournament.parentTournamentId ?? tournament.id;
 }
 
+async function getSourceTournamentId(tournamentId: string): Promise<string> {
+	const tournament = await getTournamentById(tournamentId);
+	if (!tournament) throw new Error('Liga inexistente.');
+	return getSourceId(tournament);
+}
+
+function groupStageIsComplete(matches: Match[]): boolean {
+	const groupMatches = matches.filter((match) => match.stage === 'groups');
+	return groupMatches.length > 0 && groupMatches.every((match) => match.scoreA !== null && match.scoreB !== null);
+}
+
+function hasUnresolvedQualificationTie(standings: Record<string, GroupStandingRow[]>, matches: Match[]): boolean {
+	for (const [group, rows] of Object.entries(standings)) {
+		if (rows.length < 4) return true;
+		const matchesForGroup = matches.filter((match) => match.groupCode === group && match.stage === 'groups');
+		if (hasUnresolvedGroupBoundaryTie(rows, matchesForGroup, 0)) return true;
+		if (hasUnresolvedGroupBoundaryTie(rows, matchesForGroup, 1)) return true;
+		if (hasUnresolvedGroupBoundaryTie(rows, matchesForGroup, 2)) return true;
+	}
+
+	const thirds = rankThirdPlacedGroups(standings);
+	if (thirds.length < 12) return true;
+	return compareThirdPlaceMetrics(thirds[7].row, thirds[8].row) === 0;
+}
+
+async function updateKnockoutSlot(sourceId: string, matchId: string, side: 'A' | 'B', team: string): Promise<void> {
+	await db
+		.update(tournamentMatches)
+		.set(side === 'A' ? { teamA: team } : { teamB: team })
+		.where(and(eq(tournamentMatches.id, matchId), eq(tournamentMatches.tournamentId, sourceId)));
+}
+
+async function syncRound32TeamsFromGroups(sourceId: string): Promise<boolean> {
+	const matches = await listMatches(sourceId);
+	if (!groupStageIsComplete(matches)) return false;
+
+	const standings = await buildGroupStandings(sourceId);
+	if (hasUnresolvedQualificationTie(standings, matches)) return false;
+
+	let changed = false;
+	for (const [matchId, def] of Object.entries(R32_DEFS)) {
+		const teamA = teamAt(standings, def.aGroup, def.aPos);
+		if (teamA) {
+			await updateKnockoutSlot(sourceId, matchId, 'A', teamA);
+			changed = true;
+		}
+
+		if (def.bGroup !== undefined && def.bPos !== undefined) {
+			const teamB = teamAt(standings, def.bGroup, def.bPos);
+			if (teamB) {
+				await updateKnockoutSlot(sourceId, matchId, 'B', teamB);
+				changed = true;
+			}
+		}
+	}
+
+	const thirdAssignment = resolveBestThirds(standings);
+	for (const [matchId, group] of thirdAssignment) {
+		const team = teamAt(standings, group, 2);
+		if (!team) continue;
+		await updateKnockoutSlot(sourceId, matchId, 'B', team);
+		changed = true;
+	}
+
+	return changed;
+}
+
+async function syncKnockoutWinner(sourceId: string, match: Match): Promise<boolean> {
+	const flow = FLOW[match.id];
+	if (!flow) return false;
+
+	const { winner, loser } = resolveWinner(match.teamA, match.teamB, match.scoreA, match.scoreB, match.penaltyWinner);
+	if (!winner) return false;
+
+	await updateKnockoutSlot(sourceId, flow.w[0], flow.w[1], winner);
+	if (loser && flow.l) {
+		await updateKnockoutSlot(sourceId, flow.l[0], flow.l[1], loser);
+	}
+
+	return true;
+}
+
 export async function createTournament(input: {
 	name: string;
 	alias?: string;
@@ -597,19 +745,25 @@ export async function setMatchResult(input: {
 	actorUserId?: string;
 }): Promise<Match> {
 	if (input.scoreA < 0 || input.scoreB < 0) throw new Error('El resultado real no puede tener goles negativos.');
+	const sourceId = await getSourceTournamentId(input.tournamentId);
 
-	// Knockout ties require a penalty winner
-	const [existing] = await db.select().from(tournamentMatches).where(and(eq(tournamentMatches.id, input.matchId), eq(tournamentMatches.tournamentId, input.tournamentId))).limit(1);
-	if (existing && existing.stage !== 'groups' && input.scoreA === input.scoreB && !input.penaltyWinner) {
+	const [existing] = await db.select().from(tournamentMatches).where(and(eq(tournamentMatches.id, input.matchId), eq(tournamentMatches.tournamentId, sourceId))).limit(1);
+	if (!existing) throw new Error('Partido inexistente.');
+	if (existing.stage === 'groups' && input.penaltyWinner) {
+		throw new Error('Los partidos de fase de grupos no admiten ganador por penales.');
+	}
+	if (existing.stage !== 'groups' && input.scoreA === input.scoreB && !input.penaltyWinner) {
 		throw new Error('Los partidos de eliminación directa con empate requieren un ganador por penales.');
+	}
+	if (existing.stage !== 'groups' && input.scoreA !== input.scoreB && input.penaltyWinner) {
+		throw new Error('Solo se puede cargar ganador por penales cuando el resultado esta empatado.');
 	}
 
 	const [updated] = await db
 		.update(tournamentMatches)
 		.set({ scoreA: input.scoreA, scoreB: input.scoreB, penaltyWinner: input.penaltyWinner, isClosed: true })
-		.where(and(eq(tournamentMatches.id, input.matchId), eq(tournamentMatches.tournamentId, input.tournamentId)))
+		.where(and(eq(tournamentMatches.id, input.matchId), eq(tournamentMatches.tournamentId, sourceId)))
 		.returning();
-	if (!updated) throw new Error('Partido inexistente.');
 
 	await createAuditLog({
 		userId: input.actorUserId ? Number(input.actorUserId) : null,
@@ -619,7 +773,21 @@ export async function setMatchResult(input: {
 		payload: { scoreA: input.scoreA, scoreB: input.scoreB, penaltyWinner: input.penaltyWinner }
 	});
 
-	return toMatch(updated);
+	const match = toMatch(updated);
+	const synced = match.stage === 'groups'
+		? await syncRound32TeamsFromGroups(sourceId)
+		: await syncKnockoutWinner(sourceId, match);
+	if (synced) {
+		await createAuditLog({
+			userId: input.actorUserId ? Number(input.actorUserId) : null,
+			action: 'bracket_synced',
+			entityType: 'tournament',
+			entityId: sourceId,
+			payload: { sourceMatchId: input.matchId, stage: match.stage }
+		});
+	}
+
+	return match;
 }
 
 export async function getTournamentById(tournamentId: string): Promise<Tournament | null> {
@@ -640,11 +808,12 @@ export async function updateScoringRules(input: {
 	scoringConfig: ScoringConfig;
 	actorUserId?: string;
 }): Promise<ScoringConfig> {
+	const sourceId = await getSourceTournamentId(input.tournamentId);
 
 	const [updated] = await db
 		.update(tournaments)
 		.set({ scoringConfigJson: serializeScoringConfig(input.scoringConfig) })
-		.where(eq(tournaments.id, input.tournamentId))
+		.where(eq(tournaments.id, sourceId))
 		.returning();
 	if (!updated) throw new Error('Competicion inexistente.');
 
@@ -652,7 +821,7 @@ export async function updateScoringRules(input: {
 		userId: input.actorUserId ? Number(input.actorUserId) : null,
 		action: 'scoring_rules_updated',
 		entityType: 'tournament',
-		entityId: input.tournamentId,
+		entityId: sourceId,
 		payload: input.scoringConfig
 	});
 
@@ -674,10 +843,11 @@ export async function getTournamentSettings(tournamentId: string): Promise<Tourn
 }
 
 export async function lockTournament(tournamentId: string, reason: string, actorUserId?: string): Promise<TournamentSettings> {
+	const sourceId = await getSourceTournamentId(tournamentId);
 	const [updated] = await db
 		.update(tournaments)
 		.set({ state: 'locked', lockReason: reason || 'Bloqueo manual por administracion.' })
-		.where(eq(tournaments.id, tournamentId))
+		.where(eq(tournaments.id, sourceId))
 		.returning();
 	if (!updated) throw new Error('Competicion inexistente.');
 
@@ -685,7 +855,7 @@ export async function lockTournament(tournamentId: string, reason: string, actor
 		userId: actorUserId ? Number(actorUserId) : null,
 		action: 'tournament_locked',
 		entityType: 'tournament',
-		entityId: tournamentId,
+		entityId: sourceId,
 		payload: { reason }
 	});
 
@@ -724,27 +894,14 @@ export async function getLeaderboard(tournamentId: string): Promise<LeaderboardE
 		for (const row of predictionRows.filter((item) => String(item.userId) === user.id)) {
 			const prediction = toPrediction(row);
 			const match = matchMap.get(prediction.matchId);
-			if (!match || match.scoreA === null || match.scoreB === null) continue;
+			if (!match) continue;
+			const points = calculatePredictionPoints(prediction, match, config);
+			if (!points) continue;
 
-			const stageConfig = getStageConfig(config, match.stage);
-			const predictedOutcome = getOutcome(prediction.predA, prediction.predB, match.stage, prediction.predPenaltyWinner);
-			const actualOutcome = getOutcome(match.scoreA, match.scoreB, match.stage, match.penaltyWinner);
-			const exact = prediction.predA === match.scoreA && prediction.predB === match.scoreB
-				&& (match.stage === 'groups' || match.scoreA !== match.scoreB || prediction.predPenaltyWinner === match.penaltyWinner);
-
-			if (exact) {
-				totalPoints += stageConfig.outcome + stageConfig.exact;
-				exactHits += 1;
-			} else if (predictedOutcome === actualOutcome) {
-				totalPoints += stageConfig.outcome;
-				outcomeHits += 1;
-			}
-
-			// Bracket bonus: points for correctly predicting the advancing team
-			if (match.stage !== 'groups' && predictedOutcome === actualOutcome) {
-				totalPoints += stageConfig.bracketTeam;
-				bracketPoints += stageConfig.bracketTeam;
-			}
+			totalPoints += points.totalPoints;
+			bracketPoints += points.bracketPoints;
+			if (points.exactHit) exactHits += 1;
+			else if (points.outcomeHit) outcomeHits += 1;
 		}
 		return { userId: user.id, nickname: user.nickname, role: user.role, avatarUrl: user.avatarUrl, totalPoints, exactHits, outcomeHits, bracketPoints };
 	});
@@ -776,50 +933,9 @@ export async function getPlayerMatchDetails(userId: string, tournamentId: string
 	for (const row of predRows) {
 		const pred = toPrediction(row);
 		const match = matchMap.get(pred.matchId);
-		if (!match || match.scoreA === null || match.scoreB === null) continue;
-
-		const stageConfig = getStageConfig(config, match.stage);
-		const predictedOutcome = getOutcome(pred.predA, pred.predB, match.stage, pred.predPenaltyWinner);
-		const actualOutcome = getOutcome(match.scoreA, match.scoreB, match.stage, match.penaltyWinner);
-		const exact = pred.predA === match.scoreA && pred.predB === match.scoreB
-			&& (match.stage === 'groups' || match.scoreA !== match.scoreB || pred.predPenaltyWinner === match.penaltyWinner);
-
-		let outcomePoints = 0;
-		let exactPoints = 0;
-		let bracketPts = 0;
-		let reason = '';
-
-		if (exact) {
-			outcomePoints = stageConfig.outcome;
-			exactPoints = stageConfig.exact;
-			reason = 'Resultado exacto';
-		} else if (predictedOutcome === actualOutcome) {
-			outcomePoints = stageConfig.outcome;
-			reason = 'Acierto de resultado';
-		} else {
-			reason = 'No acerto';
-		}
-
-		if (match.stage !== 'groups' && predictedOutcome === actualOutcome) {
-			bracketPts = stageConfig.bracketTeam;
-			reason += ` + equipo avanza (${bracketPts}pts)`;
-		}
-
-		details.push({
-			matchId: match.id,
-			stage: match.stage,
-			teamA: match.teamA,
-			teamB: match.teamB,
-			scoreA: match.scoreA,
-			scoreB: match.scoreB,
-			predA: pred.predA,
-			predB: pred.predB,
-			outcomePoints,
-			exactPoints,
-			bracketPoints: bracketPts,
-			totalPoints: outcomePoints + exactPoints + bracketPts,
-			reason
-		});
+		if (!match) continue;
+		const points = calculatePredictionPoints(pred, match, config);
+		if (points) details.push(toMatchPointDetail(points));
 	}
 
 	return details.sort((a, b) => b.totalPoints - a.totalPoints);
@@ -832,10 +948,11 @@ export async function updateMatchTeams(input: {
 	teamB: string;
 	actorUserId?: string;
 }): Promise<Match> {
+	const sourceId = await getSourceTournamentId(input.tournamentId);
 	const [updated] = await db
 		.update(tournamentMatches)
 		.set({ teamA: input.teamA.trim(), teamB: input.teamB.trim() })
-		.where(and(eq(tournamentMatches.id, input.matchId), eq(tournamentMatches.tournamentId, input.tournamentId)))
+		.where(and(eq(tournamentMatches.id, input.matchId), eq(tournamentMatches.tournamentId, sourceId)))
 		.returning();
 	if (!updated) throw new Error('Partido inexistente.');
 
@@ -860,12 +977,13 @@ export async function addMatch(input: {
 	venue?: string;
 	actorUserId?: string;
 }): Promise<Match> {
+	const sourceId = await getSourceTournamentId(input.tournamentId);
 	const id = randomUUID();
 	const [created] = await db
 		.insert(tournamentMatches)
 		.values({
 			id,
-			tournamentId: input.tournamentId,
+			tournamentId: sourceId,
 			stage: input.stage,
 			groupCode: input.groupCode || null,
 			teamA: input.teamA.trim(),
@@ -891,7 +1009,8 @@ export async function addMatch(input: {
 }
 
 export async function buildGroupStandings(tournamentId: string): Promise<Record<string, GroupStandingRow[]>> {
-	const matches = await listMatches(tournamentId);
+	const sourceId = await getSourceTournamentId(tournamentId);
+	const matches = await listMatches(sourceId);
 	const groupMatches = matches.filter((m) => m.groupCode && m.stage === 'groups');
 	const tables = new Map<string, Map<string, GroupStandingRow>>();
 
@@ -899,7 +1018,7 @@ export async function buildGroupStandings(tournamentId: string): Promise<Record<
 	const adjustments = await db
 		.select()
 		.from(teamGroupAdjustments)
-		.where(eq(teamGroupAdjustments.tournamentId, tournamentId));
+		.where(eq(teamGroupAdjustments.tournamentId, sourceId));
 	const adjustmentMap = new Map<string, number>();
 	for (const adj of adjustments) {
 		adjustmentMap.set(`${adj.groupCode}::${adj.team}`, adj.tiebreakerPoints);
@@ -948,12 +1067,8 @@ export async function buildGroupStandings(tournamentId: string): Promise<Record<
 
 	const result: Record<string, GroupStandingRow[]> = {};
 	for (const [group, rows] of tables.entries()) {
-		result[group] = [...rows.values()].sort((x, y) => {
-			if (y.points !== x.points) return y.points - x.points;
-			if (y.goalDiff !== x.goalDiff) return y.goalDiff - x.goalDiff;
-			if (y.goalsFor !== x.goalsFor) return y.goalsFor - x.goalsFor;
-			return y.tiebreakerPoints - x.tiebreakerPoints;
-		});
+		const matchesForGroup = groupMatches.filter((match) => match.groupCode === group);
+		result[group] = sortGroupStandingRows([...rows.values()], matchesForGroup);
 	}
 	return result;
 }
@@ -961,10 +1076,11 @@ export async function buildGroupStandings(tournamentId: string): Promise<Record<
 /* ─── Tiebreaker adjustments ─── */
 
 export async function getGroupAdjustments(tournamentId: string) {
+	const sourceId = await getSourceTournamentId(tournamentId);
 	return db
 		.select()
 		.from(teamGroupAdjustments)
-		.where(eq(teamGroupAdjustments.tournamentId, tournamentId));
+		.where(eq(teamGroupAdjustments.tournamentId, sourceId));
 }
 
 export async function setGroupAdjustment(input: {
@@ -975,11 +1091,12 @@ export async function setGroupAdjustment(input: {
 	reason?: string;
 	actorUserId: string;
 }) {
+	const sourceId = await getSourceTournamentId(input.tournamentId);
 	const now = new Date().toISOString();
 	await db
 		.insert(teamGroupAdjustments)
 		.values({
-			tournamentId: input.tournamentId,
+			tournamentId: sourceId,
 			groupCode: input.groupCode,
 			team: input.team,
 			tiebreakerPoints: input.tiebreakerPoints,
@@ -998,9 +1115,20 @@ export async function setGroupAdjustment(input: {
 		userId: Number(input.actorUserId),
 		action: 'tiebreaker_set',
 		entityType: 'team_group_adjustment',
-		entityId: `${input.tournamentId}::${input.groupCode}::${input.team}`,
+		entityId: `${sourceId}::${input.groupCode}::${input.team}`,
 		payload: { tiebreakerPoints: input.tiebreakerPoints, reason: input.reason }
 	});
+
+	const synced = await syncRound32TeamsFromGroups(sourceId);
+	if (synced) {
+		await createAuditLog({
+			userId: Number(input.actorUserId),
+			action: 'bracket_synced',
+			entityType: 'tournament',
+			entityId: sourceId,
+			payload: { source: 'tiebreaker', groupCode: input.groupCode, team: input.team }
+		});
+	}
 }
 
 export async function buildLandingData() {

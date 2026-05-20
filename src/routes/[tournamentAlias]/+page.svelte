@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { STAGE_LABELS } from '$lib/scoring-config';
+	import { SCORING_STAGES, STAGE_LABELS } from '$lib/scoring-config';
 	import type { MatchStage } from '$lib/types';
 	import UserAvatar from '$lib/components/UserAvatar.svelte';
 	let { data } = $props();
 	const ogImage = $derived(`${$page.url.origin}/og-image.jpg`);
 
-	const STAGES: MatchStage[] = ['groups', 'round32', 'round16', 'quarterfinal', 'semifinal', 'final'];
+	const STAGES: readonly MatchStage[] = SCORING_STAGES;
 
 	let inviteMsg = $state('');
 	async function copyInviteLink() {
@@ -119,8 +119,7 @@
 							<th class="pb-3 pr-4 text-left font-semibold">Fase</th>
 							<th class="pb-3 px-4 text-center font-semibold">Resultado</th>
 							<th class="pb-3 px-4 text-center font-semibold">R. Exacto</th>
-							<th class="pb-3 px-4 text-center font-semibold">Eq. en llave</th>
-							<th class="pb-3 pl-4 text-center font-semibold">Eq. lado incorrecto</th>
+							<th class="pb-3 pl-4 text-center font-semibold">Equipo que avanza</th>
 						</tr>
 					</thead>
 					<tbody class="divide-y divide-slate-100">
@@ -131,21 +130,13 @@
 									<td class="py-3 pr-4 text-sm font-bold text-slate-700">{STAGE_LABELS[stage]}</td>
 									<td class="py-3 px-4 text-center text-base font-semibold text-blue-600">{sc.outcome}</td>
 									<td class="py-3 px-4 text-center text-base font-semibold text-emerald-600">{sc.exact}</td>
-									<td class="py-3 px-4 text-center text-base font-semibold text-violet-600">{sc.bracketTeam}</td>
-									<td class="py-3 pl-4 text-center text-base font-semibold text-orange-600">{sc.bracketTeamWrongSide}</td>
+									<td class="py-3 pl-4 text-center text-base font-semibold text-violet-600">{sc.bracketTeam}</td>
 								</tr>
 							{/if}
 						{/each}
 					</tbody>
 				</table>
 			</div>
-			{#if data.tournament.scoringConfig.bonusChampion || data.tournament.scoringConfig.bonusRunnerUp || data.tournament.scoringConfig.bonusThird}
-				<div class="mt-6 flex flex-wrap gap-3 border-t border-slate-100 pt-4">
-					<span class="rounded-full bg-amber-100 px-4 py-1.5 text-sm font-bold text-amber-700">🥇 Campeón: +{data.tournament.scoringConfig.bonusChampion} pts</span>
-					<span class="rounded-full bg-slate-100 px-4 py-1.5 text-sm font-bold text-slate-600">🥈 Sub: +{data.tournament.scoringConfig.bonusRunnerUp} pts</span>
-					<span class="rounded-full bg-orange-100 px-4 py-1.5 text-sm font-bold text-orange-700">🥉 3ro: +{data.tournament.scoringConfig.bonusThird} pts</span>
-				</div>
-			{/if}
 		</div>
 	{/if}
 

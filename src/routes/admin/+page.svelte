@@ -2,7 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { Alert, Badge } from 'flowbite-svelte';
 	import { getFlagUrl, VENUES } from '$lib/teams';
-	import { STAGE_LABELS, defaultScoringConfig } from '$lib/scoring-config';
+	import { SCORING_STAGES, STAGE_LABELS, defaultScoringConfig } from '$lib/scoring-config';
 	import type { MatchStage, ScoringConfig } from '$lib/types';
 
 	let { data, form } = $props();
@@ -14,7 +14,7 @@
 	$effect(() => {
 		scoringConfig = data.rules ? structuredClone(data.rules) : defaultScoringConfig();
 	});
-	const STAGES: MatchStage[] = ['groups', 'round32', 'round16', 'quarterfinal', 'semifinal', 'final'];
+	const STAGES: readonly MatchStage[] = SCORING_STAGES;
 
 	/* ─── Tabs ─── */
 	type AdminTab = 'torneos' | 'usuarios' | 'resultados' | 'config' | 'blog';
@@ -388,8 +388,8 @@
 			<div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
 				<h2 class="mb-1 text-lg font-black text-slate-800">⚖️ Desempate manual por grupo</h2>
 				<p class="mb-4 text-xs text-slate-400">
-					Asigná puntos de desempate para resolver empates en fase de grupos (fair play, sorteo FIFA, historial, etc.).
-					A mayor puntaje, más arriba queda el equipo cuando hay igualdad en puntos, diferencia de gol y goles a favor.
+					Asigná puntos de desempate para conducta del equipo y ranking FIFA/Coca-Cola cuando sigan empatados los criterios deportivos.
+					A mayor puntaje, más arriba queda el equipo cuando persiste la igualdad.
 				</p>
 
 				<div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -420,7 +420,7 @@
 										<input
 											name="reason"
 											type="text"
-											placeholder="Motivo"
+											placeholder="Fair play/ranking"
 											value={existing?.reason ?? ''}
 											class="w-24 rounded border border-slate-200 bg-white px-1.5 py-1 text-xs focus:border-sky-400 focus:ring-1 focus:ring-sky-400/20"
 										/>
@@ -934,8 +934,7 @@
 								<th class="py-2 text-left">Fase</th>
 								<th class="py-2 text-center">Resultado</th>
 								<th class="py-2 text-center">R. Exacto</th>
-								<th class="py-2 text-center">Equipo en llave</th>
-								<th class="py-2 text-center">Eq. lado incorrecto</th>
+								<th class="py-2 text-center">Equipo que avanza</th>
 							</tr>
 						</thead>
 						<tbody class="divide-y divide-slate-100">
@@ -967,53 +966,10 @@
 											disabled={stage === 'groups'}
 										/>
 									</td>
-									<td class="py-2 text-center">
-										<input
-											type="number"
-											min="0"
-											bind:value={scoringConfig.stages[stage].bracketTeamWrongSide}
-											class="w-14 rounded border border-slate-200 bg-slate-50 px-1 py-1 text-center text-sm font-bold focus:border-sky-400"
-											disabled={stage === 'groups'}
-										/>
-									</td>
 								</tr>
 							{/each}
 						</tbody>
 					</table>
-				</div>
-
-				<!-- Bonus points -->
-				<div class="mt-6 border-t border-slate-200 pt-4">
-					<h3 class="mb-3 text-sm font-bold text-slate-700">Bonus por posición final</h3>
-					<div class="grid grid-cols-3 gap-3">
-						<div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-center">
-							<span class="mb-1 block text-[10px] font-bold uppercase text-amber-600">🥇 Campeón</span>
-							<input
-								type="number"
-								min="0"
-								bind:value={scoringConfig.bonusChampion}
-								class="w-full rounded border border-amber-200 bg-white px-2 py-1.5 text-center text-lg font-black text-amber-700 focus:border-amber-400"
-							/>
-						</div>
-						<div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-center">
-							<span class="mb-1 block text-[10px] font-bold uppercase text-slate-500">🥈 Subcampeón</span>
-							<input
-								type="number"
-								min="0"
-								bind:value={scoringConfig.bonusRunnerUp}
-								class="w-full rounded border border-slate-200 bg-white px-2 py-1.5 text-center text-lg font-black text-slate-700 focus:border-sky-400"
-							/>
-						</div>
-						<div class="rounded-lg border border-orange-200 bg-orange-50 p-3 text-center">
-							<span class="mb-1 block text-[10px] font-bold uppercase text-orange-600">🥉 Tercero</span>
-							<input
-								type="number"
-								min="0"
-								bind:value={scoringConfig.bonusThird}
-								class="w-full rounded border border-orange-200 bg-white px-2 py-1.5 text-center text-lg font-black text-orange-700 focus:border-orange-400"
-							/>
-						</div>
-					</div>
 				</div>
 
 				<!-- Submit -->

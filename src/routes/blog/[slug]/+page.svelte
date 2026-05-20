@@ -52,7 +52,7 @@
 	<div>
 		<h1 class="text-3xl font-black tracking-tight text-slate-900 md:text-4xl">{data.post.title}</h1>
 		<p class="mt-2 text-sm text-slate-400">
-			Por <span class="font-semibold text-slate-600">{data.post.authorNickname}</span> · {formatDate(data.post.createdAt)}
+			{formatDate(data.post.createdAt)}
 		</p>
 	</div>
 

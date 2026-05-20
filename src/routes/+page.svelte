@@ -123,7 +123,7 @@
 							<h3 class="font-bold text-slate-800 group-hover:text-sky-600">{post.title}</h3>
 							<p class="mt-1 line-clamp-2 text-sm text-slate-500">{post.excerpt}</p>
 							<p class="mt-2 text-xs text-slate-400">
-								Por <span class="font-semibold">{post.authorNickname}</span> · {new Date(post.createdAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}
+								{new Date(post.createdAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}
 							</p>
 						</div>
 					</a>

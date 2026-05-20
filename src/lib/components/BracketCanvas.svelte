@@ -2,6 +2,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import * as THREE from 'three';
 	import { getFlagUrl } from '$lib/teams';
+	import { loserConnections, winnerConnections } from '$lib/bracket-rules';
 	import type { Match } from '$lib/types';
 
 	interface Props {
@@ -92,17 +93,8 @@
 		'qf-01','qf-02','sf-01'
 	]);
 
-	const WINNER_CONNS: [string, string][] = [
-		['r32-01','r16-01'],['r32-02','r16-01'],['r32-03','r16-02'],['r32-04','r16-02'],
-		['r32-05','r16-03'],['r32-06','r16-03'],['r32-07','r16-04'],['r32-08','r16-04'],
-		['r32-09','r16-05'],['r32-10','r16-05'],['r32-11','r16-06'],['r32-12','r16-06'],
-		['r32-13','r16-07'],['r32-14','r16-07'],['r32-15','r16-08'],['r32-16','r16-08'],
-		['r16-01','qf-01'],['r16-02','qf-01'],['r16-03','qf-02'],['r16-04','qf-02'],
-		['r16-05','qf-03'],['r16-06','qf-03'],['r16-07','qf-04'],['r16-08','qf-04'],
-		['qf-01','sf-01'],['qf-02','sf-01'],['qf-03','sf-02'],['qf-04','sf-02'],
-		['sf-01','final'],['sf-02','final']
-	];
-	const LOSER_CONNS: [string, string][] = [['sf-01','3rd'],['sf-02','3rd']];
+	const WINNER_CONNS = winnerConnections();
+	const LOSER_CONNS = loserConnections();
 
 	// How many cards per side for each stage (for optimal spread computation)
 	const STAGE_COUNT_PER_SIDE: Record<string, number> = {

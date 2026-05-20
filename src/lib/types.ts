@@ -21,20 +21,12 @@ export interface StageScoringConfig {
 	outcome: number;
 	/** Bonus points for exact score (on top of outcome) */
 	exact: number;
-	/** Points for each correct team predicted in this bracket round */
+	/** Knockout bonus for predicting the team that advances */
 	bracketTeam: number;
-	/** Points for correct team on wrong side of bracket (usually floor(bracketTeam/2)) */
-	bracketTeamWrongSide: number;
 }
 
 export interface ScoringConfig {
 	stages: Record<MatchStage, StageScoringConfig>;
-	/** Bonus for predicting the champion */
-	bonusChampion: number;
-	/** Bonus for predicting the runner-up */
-	bonusRunnerUp: number;
-	/** Bonus for predicting third place */
-	bonusThird: number;
 }
 
 export interface Tournament {
@@ -110,7 +102,7 @@ export interface GroupStandingRow {
 	goalsAgainst: number;
 	goalDiff: number;
 	points: number;
-	/** Manual tiebreaker points set by admin (fair play, drawing lots, etc.) */
+	/** Manual tiebreaker points set by admin for fair play and FIFA ranking */
 	tiebreakerPoints: number;
 }
 

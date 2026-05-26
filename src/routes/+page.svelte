@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { compareThirdPlaceMetrics, rankThirdPlacedGroups } from '$lib/bracket-rules';
+	import { formatMatchDate as formatDate, formatMatchTime as formatTime } from '$lib/match-datetime';
 	import { getFlagUrl, VENUES } from '$lib/teams';
 	import type { Match } from '$lib/types';
 	import BracketCanvas from '$lib/components/BracketCanvas.svelte';
@@ -37,14 +38,6 @@
 
 	function getGroupColor(group: string) {
 		return groupColors[group] ?? { from: 'from-slate-600', to: 'to-slate-800' };
-	}
-
-	function formatDate(iso: string) {
-		return new Date(iso).toLocaleDateString('es-AR', { day: 'numeric', month: 'short', timeZone: 'America/Argentina/Buenos_Aires' });
-	}
-
-	function formatTime(iso: string) {
-		return new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' });
 	}
 
 	function venueCity(venueName: string | null): string {

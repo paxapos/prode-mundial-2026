@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { flip } from 'svelte/animate';
 	import { compareThirdPlaceMetrics, hasUnresolvedGroupBoundaryTie, rankThirdPlacedGroups } from '$lib/bracket-rules';
 	import { canonicalTeamName, getFlagUrl, getTeamId } from '$lib/teams';
 	import type { Match } from '$lib/types';
@@ -105,11 +106,11 @@
 		</div>
 	{:else}
 		<div class="space-y-3">
-			{#each filteredMatches as match}
+			{#each filteredMatches as match (match.id)}
 				{@const teamAIsValid = teamIsValid(match.teamA)}
 				{@const teamBIsValid = teamIsValid(match.teamB)}
 				{@const origin = bracketOriginLabel(match)}
-				<div class="overflow-hidden rounded-xl border bg-white shadow-sm transition-shadow hover:shadow-md {match.isClosed ? 'border-emerald-200' : 'border-slate-200'}">
+				<div animate:flip={{ duration: 180 }} class="overflow-hidden rounded-xl border bg-white shadow-sm transition-all duration-200 ease-out hover:-translate-y-0.5 hover:shadow-md {match.isClosed ? 'border-emerald-200' : 'border-slate-200'}">
 					<div class="flex items-center justify-between px-4 py-2 {match.isClosed ? 'bg-emerald-50' : 'bg-slate-50'}">
 						<div class="flex items-center gap-2">
 							<span class="inline-flex h-6 items-center rounded-md px-2 text-[10px] font-bold uppercase tracking-wider {match.stage === 'groups' ? 'bg-sky-100 text-sky-700' : match.stage === 'thirdplace' ? 'bg-orange-100 text-orange-700' : match.stage === 'final' ? 'bg-amber-100 text-amber-700' : 'bg-violet-100 text-violet-700'}">
@@ -122,17 +123,14 @@
 					</div>
 
 					<div class="p-4">
-						<div class="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-							<div class="flex items-center justify-end gap-2">
+						<div class="grid grid-cols-[minmax(0,1fr)_3.25rem_3.25rem_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_3.75rem_3.75rem_minmax(0,1fr)] sm:gap-3">
+							<div class="flex min-w-0 items-center justify-end gap-2">
 								<span class="truncate text-right text-sm font-bold text-slate-800">{match.teamA}</span>
 								{#if getFlagUrl(match.teamA)}<img src={getFlagUrl(match.teamA, 48)} alt={match.teamA} class="h-7 w-10 shrink-0 rounded object-cover shadow-sm" />{/if}
 							</div>
-							<div class="flex items-center gap-1.5">
-								<span class="inline-flex h-9 w-9 items-center justify-center rounded-lg {match.scoreA !== null ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-300'} text-base font-black">{match.scoreA ?? '-'}</span>
-								<span class="text-xs font-bold text-slate-300">:</span>
-								<span class="inline-flex h-9 w-9 items-center justify-center rounded-lg {match.scoreB !== null ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-300'} text-base font-black">{match.scoreB ?? '-'}</span>
-							</div>
-							<div class="flex items-center gap-2">
+							<span class="inline-flex h-9 w-full items-center justify-center rounded-lg {match.scoreA !== null ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-300'} text-base font-black">{match.scoreA ?? '-'}</span>
+							<span class="inline-flex h-9 w-full items-center justify-center rounded-lg {match.scoreB !== null ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-300'} text-base font-black">{match.scoreB ?? '-'}</span>
+							<div class="flex min-w-0 items-center gap-2">
 								{#if getFlagUrl(match.teamB)}<img src={getFlagUrl(match.teamB, 48)} alt={match.teamB} class="h-7 w-10 shrink-0 rounded object-cover shadow-sm" />{/if}
 								<span class="truncate text-sm font-bold text-slate-800">{match.teamB}</span>
 							</div>
@@ -141,33 +139,47 @@
 						{#if origin}<p class="mt-3 rounded-lg border border-violet-100 bg-violet-50 px-3 py-2 text-center text-xs font-bold text-violet-700">Origen del cruce: {origin}</p>{/if}
 						{#if match.penaltyWinner}<p class="mt-2 text-center text-xs font-semibold text-amber-600">⚡ Penales: gana {match.penaltyWinner === 'A' ? match.teamA : match.teamB}</p>{/if}
 
-						<details class="mt-3 rounded-lg border border-slate-200" open={!match.isClosed}>
-							<summary class="cursor-pointer px-3 py-2 text-xs font-bold text-slate-500 hover:text-slate-700">{match.isClosed ? '✏️ Editar resultado' : '📝 Cargar resultado'}</summary>
+						<details class="mt-3 rounded-xl border border-slate-200 transition-colors duration-200 focus-within:border-sky-200 focus-within:bg-sky-50/40" open={!match.isClosed}>
+							<summary class="cursor-pointer px-3 py-2 text-xs font-bold text-slate-500 transition-colors hover:text-slate-700">{match.isClosed ? 'Editar resultado' : 'Cargar resultado'}</summary>
 							<div class="border-t border-slate-100 p-3">
 								<form method="POST" action="?/saveResult" use:enhance class="space-y-3">
 									<input type="hidden" name="tournamentId" value={data.selectedTournament?.id} />
 									<input type="hidden" name="matchId" value={match.id} />
-									<div class="grid grid-cols-2 gap-3">
-										<div><span class="mb-1 block text-xs font-medium text-slate-500">{match.teamA}</span><input name="scoreA" type="number" min="0" required value={match.scoreA ?? ''} class="w-full rounded-lg border-2 border-slate-200 bg-slate-50 px-3 py-2 text-center text-lg font-black focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20" /></div>
-										<div><span class="mb-1 block text-xs font-medium text-slate-500">{match.teamB}</span><input name="scoreB" type="number" min="0" required value={match.scoreB ?? ''} class="w-full rounded-lg border-2 border-slate-200 bg-slate-50 px-3 py-2 text-center text-lg font-black focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20" /></div>
+									<div class="grid grid-cols-[minmax(0,1fr)_3.25rem_3.25rem_minmax(0,1fr)] items-center gap-2 sm:grid-cols-[minmax(0,1fr)_3.75rem_3.75rem_minmax(0,1fr)] sm:gap-3">
+										<label for={`score-a-${match.id}`} class="min-w-0 rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-right transition-colors duration-200 hover:border-sky-200 hover:bg-sky-50/50 sm:px-3">
+											<span class="block text-[10px] font-bold uppercase text-slate-400">Equipo A</span>
+											<span class="mt-1 flex min-w-0 items-center justify-end gap-2">
+												<span class="truncate text-sm font-bold text-slate-800">{match.teamA}</span>
+												{#if getFlagUrl(match.teamA)}<img src={getFlagUrl(match.teamA, 48)} alt={match.teamA} class="h-6 w-9 shrink-0 rounded object-cover shadow-sm" />{/if}
+											</span>
+										</label>
+										<input id={`score-a-${match.id}`} name="scoreA" type="number" min="0" inputmode="numeric" required value={match.scoreA ?? ''} aria-label={`Goles de ${match.teamA}`} class="h-14 w-full rounded-xl border-2 border-slate-200 bg-slate-50 px-2 text-center text-xl font-black text-slate-900 shadow-inner shadow-slate-200/40 transition-all duration-200 focus:border-sky-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-sky-400/20" />
+										<input id={`score-b-${match.id}`} name="scoreB" type="number" min="0" inputmode="numeric" required value={match.scoreB ?? ''} aria-label={`Goles de ${match.teamB}`} class="h-14 w-full rounded-xl border-2 border-slate-200 bg-slate-50 px-2 text-center text-xl font-black text-slate-900 shadow-inner shadow-slate-200/40 transition-all duration-200 focus:border-sky-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-sky-400/20" />
+										<label for={`score-b-${match.id}`} class="min-w-0 rounded-xl border border-slate-200 bg-white px-2.5 py-2 transition-colors duration-200 hover:border-sky-200 hover:bg-sky-50/50 sm:px-3">
+											<span class="block text-[10px] font-bold uppercase text-slate-400">Equipo B</span>
+											<span class="mt-1 flex min-w-0 items-center gap-2">
+												{#if getFlagUrl(match.teamB)}<img src={getFlagUrl(match.teamB, 48)} alt={match.teamB} class="h-6 w-9 shrink-0 rounded object-cover shadow-sm" />{/if}
+												<span class="truncate text-sm font-bold text-slate-800">{match.teamB}</span>
+											</span>
+										</label>
 									</div>
 									{#if match.stage !== 'groups'}
 										<div>
 											<span class="mb-1 block text-xs font-medium text-slate-500">Penales (si empatan)</span>
-											<select name="penaltyWinner" class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+											<select name="penaltyWinner" class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm transition-all duration-200 focus:border-sky-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-sky-400/20">
 												<option value="" selected={!match.penaltyWinner}>Sin penales</option>
 												<option value="A" selected={match.penaltyWinner === 'A'}>{match.teamA}</option>
 												<option value="B" selected={match.penaltyWinner === 'B'}>{match.teamB}</option>
 											</select>
 										</div>
 									{/if}
-									<button type="submit" class="w-full rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-slate-800">💾 Guardar resultado</button>
+									<button type="submit" class="w-full rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:bg-slate-800 hover:shadow-md focus:outline-none focus:ring-4 focus:ring-slate-900/20">Guardar y seguir</button>
 								</form>
 								{#if hasLoadedResult(match)}
 									<form method="POST" action="?/clearResult" use:enhance onsubmit={(event) => confirmClearResult(event, match)} class="mt-2">
 										<input type="hidden" name="tournamentId" value={data.selectedTournament?.id} />
 										<input type="hidden" name="matchId" value={match.id} />
-										<button type="submit" class="w-full rounded-lg border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700 transition-colors hover:bg-red-100">🗑️ Eliminar resultado</button>
+										<button type="submit" class="w-full rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700 transition-all duration-200 hover:border-red-300 hover:bg-red-100 focus:outline-none focus:ring-4 focus:ring-red-400/20">Eliminar resultado</button>
 									</form>
 								{/if}
 							</div>

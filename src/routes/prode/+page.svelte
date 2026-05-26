@@ -3,6 +3,7 @@
 	import { Badge } from 'flowbite-svelte';
 	import { getFlagUrl, GROUPS, VENUES } from '$lib/teams';
 	import { calcStandings, buildBracket, type LivePred } from '$lib/bracket-engine';
+	import { formatMatchDate as formatDateShort, formatMatchTime as formatTime } from '$lib/match-datetime';
 	import { STAGE_LABELS } from '$lib/scoring-config';
 
 	let { data } = $props();
@@ -82,20 +83,6 @@
 	};
 
 	/* ─── Helpers ────────────────────────────────────────── */
-	function formatDateShort(iso: string) {
-		return new Date(iso).toLocaleDateString('es-AR', {
-			day: 'numeric',
-			month: 'short',
-			timeZone: 'America/Argentina/Buenos_Aires'
-		});
-	}
-	function formatTime(iso: string) {
-		return new Date(iso).toLocaleTimeString('es-AR', {
-			hour: '2-digit',
-			minute: '2-digit',
-			timeZone: 'America/Argentina/Buenos_Aires'
-		});
-	}
 	function venueCity(v: string | null) {
 		if (!v) return '';
 		return VENUES[v]?.city ?? v;
@@ -362,9 +349,9 @@
 								</div>
 
 								<!-- Teams + Score -->
-								<div class="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+								<div class="grid grid-cols-[minmax(0,1fr)_2.5rem_2.5rem_minmax(0,1fr)] items-center gap-1.5 sm:gap-2">
 									<!-- Team A (right-aligned) -->
-									<div class="flex items-center justify-end gap-1.5">
+									<div class="flex min-w-0 items-center justify-end gap-1.5">
 										<span class="truncate text-right text-sm font-semibold text-slate-800">{match.teamA}</span>
 										{#if getFlagUrl(match.teamA)}
 											<img src={getFlagUrl(match.teamA, 40)} alt="" class="h-5 w-7 shrink-0 rounded-sm object-cover shadow-sm" />
@@ -372,32 +359,31 @@
 									</div>
 
 									<!-- Scores -->
-									<div class="flex items-center gap-1">
-										<input
-											type="number"
-											min="0"
-											inputmode="numeric"
-											value={pred.predA ?? ''}
-											oninput={(e) => updateScore(match.id, 'predA', e.currentTarget.value)}
-											onblur={() => handleBlur(match.id)}
-											class="score-input h-9 w-10 rounded-lg border-2 border-slate-200 bg-slate-50 text-center text-sm font-black text-slate-800
-											focus:border-amber-400 focus:bg-white focus:ring-2 focus:ring-amber-400/30"
-										/>
-										<span class="text-xs font-bold text-slate-300">:</span>
-										<input
-											type="number"
-											min="0"
-											inputmode="numeric"
-											value={pred.predB ?? ''}
-											oninput={(e) => updateScore(match.id, 'predB', e.currentTarget.value)}
-											onblur={() => handleBlur(match.id)}
-											class="score-input h-9 w-10 rounded-lg border-2 border-slate-200 bg-slate-50 text-center text-sm font-black text-slate-800
-											focus:border-amber-400 focus:bg-white focus:ring-2 focus:ring-amber-400/30"
-										/>
-									</div>
+									<input
+										type="number"
+										min="0"
+										inputmode="numeric"
+										value={pred.predA ?? ''}
+										oninput={(e) => updateScore(match.id, 'predA', e.currentTarget.value)}
+										onblur={() => handleBlur(match.id)}
+										aria-label={`Goles de ${match.teamA}`}
+										class="score-input h-9 w-full rounded-lg border-2 border-slate-200 bg-slate-50 text-center text-sm font-black text-slate-800 transition-all duration-200
+										focus:border-amber-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/30"
+									/>
+									<input
+										type="number"
+										min="0"
+										inputmode="numeric"
+										value={pred.predB ?? ''}
+										oninput={(e) => updateScore(match.id, 'predB', e.currentTarget.value)}
+										onblur={() => handleBlur(match.id)}
+										aria-label={`Goles de ${match.teamB}`}
+										class="score-input h-9 w-full rounded-lg border-2 border-slate-200 bg-slate-50 text-center text-sm font-black text-slate-800 transition-all duration-200
+										focus:border-amber-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/30"
+									/>
 
 									<!-- Team B (left-aligned) -->
-									<div class="flex items-center gap-1.5">
+									<div class="flex min-w-0 items-center gap-1.5">
 										{#if getFlagUrl(match.teamB)}
 											<img src={getFlagUrl(match.teamB, 40)} alt="" class="h-5 w-7 shrink-0 rounded-sm object-cover shadow-sm" />
 										{/if}

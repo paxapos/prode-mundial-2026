@@ -1,5 +1,6 @@
 import type { Match, MatchStage } from '$lib/types';
 import { STAGE_LABELS } from '$lib/scoring-config';
+import { formatMatchDate, formatMatchTime } from '$lib/match-datetime';
 import { VENUES } from '$lib/teams';
 import { WORLD_CUP_2026_MATCHES } from '$lib/worldcup-2026-fixture';
 
@@ -98,21 +99,8 @@ export function sortMatchesByNumber(matches: Match[]) {
 	return [...matches].sort((a, b) => matchNumber(a) - matchNumber(b) || a.kickoffAt.localeCompare(b.kickoffAt));
 }
 
-export function formatDate(iso: string) {
-	return new Date(iso).toLocaleDateString('es-AR', {
-		day: 'numeric',
-		month: 'short',
-		timeZone: 'America/Argentina/Buenos_Aires'
-	});
-}
-
-export function formatTime(iso: string) {
-	return new Date(iso).toLocaleTimeString('es-AR', {
-		hour: '2-digit',
-		minute: '2-digit',
-		timeZone: 'America/Argentina/Buenos_Aires'
-	});
-}
+export const formatDate = formatMatchDate;
+export const formatTime = formatMatchTime;
 
 export function venueCity(venue: string | null) {
 	if (!venue) return '';

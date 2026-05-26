@@ -2,7 +2,7 @@ export type UserRole = 'player' | 'admin';
 
 export type TournamentState = 'draft' | 'open_predictions' | 'locked' | 'finished';
 
-export type MatchStage = 'groups' | 'round32' | 'round16' | 'quarterfinal' | 'semifinal' | 'final';
+export type MatchStage = 'groups' | 'round32' | 'round16' | 'quarterfinal' | 'semifinal' | 'thirdplace' | 'final';
 
 export type SideWinner = 'A' | 'B' | null;
 

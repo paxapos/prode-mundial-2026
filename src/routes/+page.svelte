@@ -1,10 +1,23 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { compareThirdPlaceMetrics, rankThirdPlacedGroups } from '$lib/bracket-rules';
 	import { getFlagUrl, VENUES } from '$lib/teams';
 	import type { Match } from '$lib/types';
 	import BracketCanvas from '$lib/components/BracketCanvas.svelte';
 
 	let { data } = $props();
+	let blogPageNumbers = $derived.by(() => {
+		const total = data.blogPagination?.totalPages ?? 1;
+		const current = data.blogPagination?.page ?? 1;
+		const end = Math.min(total, Math.max(5, current + 2));
+		const start = Math.max(1, Math.min(current - 2, end - 4));
+
+		return Array.from({ length: end - start + 1 }, (_, index) => start + index);
+	});
+
+	function blogPageHref(page: number): string {
+		return page === 1 ? '/#blog' : `/?blogPage=${page}#blog`;
+	}
 
 	/** 12 distinct gradient pairs – only used for group headers */
 	const groupColors: Record<string, { from: string; to: string }> = {
@@ -45,6 +58,14 @@
 		if (!data.bracketMatches?.length) return false;
 		const now = new Date();
 		return data.bracketMatches.some((m: Match) => new Date(m.kickoffAt) <= now);
+	});
+	let bestThirdGroups = $derived.by((): Set<string> => {
+		if (!data.groupMatches?.length || !data.groupMatches.every((match: Match) => match.scoreA !== null && match.scoreB !== null)) return new Set();
+
+		const thirds = rankThirdPlacedGroups(data.groups);
+		if (thirds.length < 12 || compareThirdPlaceMetrics(thirds[7].row, thirds[8].row) === 0) return new Set();
+
+		return new Set(thirds.slice(0, 8).map((third) => third.group));
 	});
 
 	onMount(() => {
@@ -105,19 +126,19 @@
 
 	<!-- La pizarra del DT -->
 	{#if data.blogPosts?.length}
-		<div class="space-y-4">
+		<div id="blog" class="scroll-mt-24 space-y-4">
 			<div class="flex items-center gap-3">
 				<img src="/guru-futbol.svg" alt="Gurú Táctico" class="h-9 w-9" />
 				<div>
 					<h2 class="text-xl font-black tracking-tight text-slate-900">La Pizarra del DT</h2>
-					<p class="text-xs text-slate-400">Análisis táctico del Mundial 2026</p>
+					<p class="text-xs text-slate-400">Últimos análisis tácticos del Mundial 2026</p>
 				</div>
 			</div>
 			<div class="grid gap-4 md:grid-cols-2">
 				{#each data.blogPosts as post}
 					<a href="/blog/{post.slug}" class="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md">
 						{#if post.imageUrl}
-							<img src={post.imageUrl} alt={post.title} class="h-40 w-full object-cover" />
+							<img src={post.imageUrl} alt={post.title} loading="lazy" decoding="async" class="h-40 w-full object-cover" />
 						{/if}
 						<div class="p-4">
 							<h3 class="font-bold text-slate-800 group-hover:text-sky-600">{post.title}</h3>
@@ -129,6 +150,38 @@
 					</a>
 				{/each}
 			</div>
+			{#if data.blogPagination?.totalPages > 1}
+				<nav class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm" aria-label="Paginación de artículos">
+					<p class="text-xs font-semibold text-slate-400">
+						Página {data.blogPagination.page} de {data.blogPagination.totalPages} · {data.blogPagination.total} columnas
+					</p>
+					<div class="flex flex-wrap gap-2">
+						<a
+							href={blogPageHref(Math.max(1, data.blogPagination.page - 1))}
+							aria-disabled={data.blogPagination.page === 1}
+							class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-50 aria-disabled:pointer-events-none aria-disabled:opacity-40"
+						>
+							Anterior
+						</a>
+						{#each blogPageNumbers as page}
+							<a
+								href={blogPageHref(page)}
+								aria-current={page === data.blogPagination.page ? 'page' : undefined}
+								class="rounded-lg border px-3 py-2 text-xs font-bold transition-colors {page === data.blogPagination.page ? 'border-sky-600 bg-sky-600 text-white' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}"
+							>
+								{page}
+							</a>
+						{/each}
+						<a
+							href={blogPageHref(Math.min(data.blogPagination.totalPages, data.blogPagination.page + 1))}
+							aria-disabled={data.blogPagination.page === data.blogPagination.totalPages}
+							class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-50 aria-disabled:pointer-events-none aria-disabled:opacity-40"
+						>
+							Siguiente
+						</a>
+					</div>
+				</nav>
+			{/if}
 		</div>
 	{/if}
 
@@ -180,10 +233,13 @@
 							</thead>
 							<tbody class="divide-y divide-slate-50">
 								{#each rows as row, idx}
-									<tr class={idx < 2 ? 'bg-emerald-50/30' : ''}>
+									{@const isBestThird = idx === 2 && bestThirdGroups.has(group)}
+									<tr class={idx < 2 || isBestThird ? 'bg-emerald-50/30' : ''}>
 										<td class="px-4 py-2.5">
 											<div class="flex items-center gap-2.5">
 												{#if idx < 2}
+													<span class="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">✓</span>
+												{:else if isBestThird}
 													<span class="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">✓</span>
 												{:else if idx === 2}
 													<span class="flex h-5 w-5 items-center justify-center rounded-full bg-amber-400 text-[10px] font-bold text-white">•</span>

@@ -22,15 +22,18 @@ Cada fase del torneo tiene estos parámetros aplicados por el cálculo automáti
 | **Resultado exacto (exact)** | Acertar el marcador exacto; suma este bonus además del outcome |
 | **Equipo que avanza (bracketTeam)** | Bonus de eliminación directa cuando el pronóstico acierta el equipo que pasa de ronda |
 
+En fases de eliminación directa, los puntos de **Resultado** y **Resultado exacto** solo se otorgan si el pronóstico reconstruido tiene los dos equipos reales del partido, comparados por identidad/código de equipo. No alcanza con acertar que ganó el local o el visitante. Si el usuario no acertó ambos equipos del cruce, no suma outcome ni exact aunque el marcador coincida; solo puede sumar **Equipo que avanza** si acertó el equipo que pasó de ronda.
+
 ### Valores por defecto (basados en Qatar 2022 "Paxapoga")
 
 | Fase | Resultado | R. Exacto | Equipo que avanza |
 |---|:---:|:---:|:---:|
 | Grupos | 1 | 2 | — |
-| Ronda de 32 | 1 | 2 | 2 |
+| 16avos de final | 1 | 2 | 2 |
 | Octavos | 1 | 2 | 3 |
 | Cuartos | 1 | 2 | 4 |
 | Semifinales | 1 | 2 | 5 |
+| Final por tercer puesto | 1 | 2 | 6 |
 | Final | 1 | 2 | 6 |
 
 ### Desempate
@@ -78,18 +81,20 @@ El torneo se divide en 12 grupos de 4 equipos.
 
 | Grupo | Equipo 1 | Equipo 2 | Equipo 3 | Equipo 4 |
 | :--- | :--- | :--- | :--- | :--- |
-| **A** | 🇲🇽 Mexico | 🇿🇦 Sudafrica | 🇰🇷 Corea del Sur | 🇨🇿 Rep. Checa |
-| **B** | 🇨🇦 Canada | 🇧🇦 Bosnia y Herz. | 🇶🇦 Catar | 🇨🇭 Suiza |
-| **C** | 🇧🇷 Brasil | 🇲🇦 Marruecos | 🇭🇹 Haiti | 🏴 Escocia |
-| **D** | 🇺🇸 Estados Unidos | 🇵🇾 Paraguay | 🇦🇺 Australia | 🇹🇷 Turquia |
+| **A** | 🇲🇽 México | 🇿🇦 Sudáfrica | 🇰🇷 Corea del Sur | 🇨🇿 República Checa |
+| **B** | 🇨🇦 Canadá | 🇧🇦 Bosnia y Herzegovina | 🇶🇦 Catar | 🇨🇭 Suiza |
+| **C** | 🇧🇷 Brasil | 🇲🇦 Marruecos | 🇭🇹 Haití | 🏴 Escocia |
+| **D** | 🇺🇸 Estados Unidos | 🇵🇾 Paraguay | 🇦🇺 Australia | 🇹🇷 Turquía |
 | **E** | 🇩🇪 Alemania | 🇨🇼 Curazao | 🇨🇮 Costa de Marfil | 🇪🇨 Ecuador |
-| **F** | 🇳🇱 Paises Bajos | 🇯🇵 Japon | 🇹🇳 Tunez | 🇵🇱 Polonia |
-| **G** | 🇧🇪 Belgica | 🇪🇬 Egipto | 🇮🇷 Iran | 🇳🇿 Nueva Zelanda |
-| **H** | 🇪🇸 Espana | 🇨🇻 Cabo Verde | 🇸🇦 Arabia Saudita | 🇺🇾 Uruguay |
+| **F** | 🇳🇱 Países Bajos | 🇯🇵 Japón | 🇸🇪 Suecia | 🇹🇳 Túnez |
+| **G** | 🇧🇪 Bélgica | 🇪🇬 Egipto | 🇮🇷 Irán | 🇳🇿 Nueva Zelanda |
+| **H** | 🇪🇸 España | 🇨🇻 Cabo Verde | 🇸🇦 Arabia Saudita | 🇺🇾 Uruguay |
 | **I** | 🇫🇷 Francia | 🇸🇳 Senegal | 🇳🇴 Noruega | 🇮🇶 Irak |
 | **J** | 🇦🇷 Argentina | 🇩🇿 Argelia | 🇦🇹 Austria | 🇯🇴 Jordania |
-| **K** | 🇵🇹 Portugal | 🇨🇩 RD Congo | 🇺🇿 Uzbekistan | 🇨🇴 Colombia |
-| **L** | 🏴 Inglaterra | 🇭🇷 Croacia | 🇬🇭 Ghana | 🇵🇦 Panama |
+| **K** | 🇵🇹 Portugal | 🇨🇩 República Democrática del Congo | 🇺🇿 Uzbekistán | 🇨🇴 Colombia |
+| **L** | 🏴 Inglaterra | 🇭🇷 Croacia | 🇬🇭 Ghana | 🇵🇦 Panamá |
+
+El fixture oficial de 104 partidos vive en `src/lib/worldcup-2026-fixture.ts` y fue extraído de la tabla local `src/partidos.html`. Los ids internos preservan la numeración FIFA: `g-001` a `g-072` son los partidos 1 a 72; `r32-01` a `final` son los partidos 73 a 104.
 
 ### Fase de eliminacion directa
 
@@ -101,13 +106,13 @@ Clasifican 32 equipos:
 
 Si dos o más equipos terminan empatados en puntos dentro de un grupo, se ordenan por:
 
-1. Puntos obtenidos en los partidos entre los equipos empatados.
-2. Diferencia de goles en los partidos entre los equipos empatados.
-3. Goles marcados en los partidos entre los equipos empatados.
-4. Diferencia de goles en todos los partidos del grupo.
-5. Goles marcados en todos los partidos del grupo.
+1. Diferencia de goles en todos los partidos del grupo.
+2. Goles marcados en todos los partidos del grupo.
+3. Puntos obtenidos en los partidos entre los equipos empatados.
+4. Diferencia de goles en los partidos entre los equipos empatados.
+5. Goles marcados en los partidos entre los equipos empatados.
 6. Conducta del equipo (fair play).
-7. Última Clasificación Mundial Masculina FIFA/Coca-Cola publicada.
+7. Sorteo o criterio manual FIFA si persiste el empate.
 
 La app calcula automáticamente los criterios deportivos. El admin puede cargar el desempate manual para conducta/ranking FIFA; si queda un empate que afecta 1°, 2°, 3° o 4° del grupo, la llave no se sincroniza hasta resolverlo.
 
@@ -121,9 +126,9 @@ Los terceros se comparan entre grupos por:
 4. Conducta del equipo (fair play).
 5. Última Clasificación Mundial Masculina FIFA/Coca-Cola publicada.
 
-La app usa el mismo desempate manual para los criterios 4 y 5, y no sincroniza la ronda de 32 si sigue empatado el corte entre el 8° y 9° mejor tercero.
+La app usa el mismo desempate manual para los criterios 4 y 5, y no sincroniza 16avos si sigue empatado el corte entre el 8° y 9° mejor tercero.
 
-#### Ronda de 32 (dieciseisavos)
+#### 16avos de final
 
 Los cruces base oficiales son:
 
@@ -145,9 +150,13 @@ Los cruces base oficiales son:
 - 2° Grupo D vs 2° Grupo G.
 
 La asignación de qué tercero va a cada cruce no se calcula con un matching genérico: sigue la tabla FIFA Annex C con las 495 combinaciones posibles de grupos terceros clasificados.
+La progresión de ganadores y perdedores de las llaves está definida en `src/lib/bracket-rules.ts` mediante `FLOW`.
+La app sincroniza automáticamente toda la llave: completa 16avos desde la tabla de grupos y luego propaga ganadores de eliminatorias cerradas hacia octavos, cuartos, semifinales, final por tercer puesto y final.
+El Fixture completo del admin muestra el origen oficial de cada cruce de eliminación directa, por ejemplo `1° Grupo C vs 2° Grupo F`, aunque el partido ya esté resuelto como equipos reales.
+El administrador puede editar manualmente los equipos de cualquier partido de eliminación directa desde el panel si hace falta resolver un desempate o aplicar una corrección operativa. La edición usa el ID/código canónico de equipo; si cambia un equipo en una llave con resultado cargado, se borra ese resultado y se resetean los cruces posteriores para recalcular puntos y clasificación con la identidad correcta. También puede eliminar resultados cargados desde el Fixture completo: al eliminar un resultado de grupos se reinicia la llave completa, y al eliminar un resultado de eliminación directa se reinician los cruces dependientes.
 
 #### Octavos de final
-- Juegan los 16 ganadores de la ronda de 32.
+- Juegan los 16 ganadores de 16avos.
 - La llave superior y la llave inferior se mantienen separadas hasta la final.
 
 #### Cuartos de final
@@ -341,7 +350,7 @@ Healthcheck:
 ## 13) Nota de alcance
 
 Este README define la logica de negocio del prode y la estructura del torneo.
-Si FIFA ajusta cruces oficiales de ronda de 32, se actualiza esta seccion sin cambiar la base del sistema de puntuacion.
+Si FIFA ajusta cruces oficiales de 16avos, se actualiza esta seccion sin cambiar la base del sistema de puntuacion.
 
 ## 14) Deploy en produccion — Cloud Run
 
@@ -365,6 +374,7 @@ pnpm ship
 | `TURSO_DATABASE_URL` | URL de Turso DB |
 | `TURSO_AUTH_TOKEN` | Token de Turso |
 | `ORIGIN` | URL publica (ej: `https://tu-dominio.com`) |
+| `BODY_SIZE_LIMIT` | Limite de body para SvelteKit en Cloud Run (default `30M`) |
 | `GOOGLE_CLIENT_ID` | Client ID de Google OAuth |
 | `GOOGLE_CLIENT_SECRET` | Client Secret de Google OAuth |
 

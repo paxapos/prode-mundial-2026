@@ -24,17 +24,19 @@
 		round16: -350,
 		quarterfinal: -700,
 		semifinal: -1050,
+		thirdplace: -1450,
 		final: -1450
 	};
 	const LAYER_3RD_Z = -1450;
 
 	// ── Stage metadata ──
-	const STAGES_ORDERED = ['round32', 'round16', 'quarterfinal', 'semifinal', 'final'] as const;
+	const STAGES_ORDERED = ['round32', 'round16', 'quarterfinal', 'semifinal', 'thirdplace', 'final'] as const;
 	const STAGE_NAMES: Record<string, string> = {
 		round32: '16avos de Final',
 		round16: 'Octavos de Final',
 		quarterfinal: 'Cuartos de Final',
 		semifinal: 'Semifinales',
+		thirdplace: 'Final por tercer puesto',
 		final: 'Final & 3er Puesto'
 	};
 	const STAGE_COLORS_UI: Record<string, { bg: string; text: string }> = {
@@ -42,15 +44,16 @@
 		round16: { bg: 'bg-violet-500', text: 'text-white' },
 		quarterfinal: { bg: 'bg-purple-500', text: 'text-white' },
 		semifinal: { bg: 'bg-fuchsia-500', text: 'text-white' },
+		thirdplace: { bg: 'bg-orange-500', text: 'text-white' },
 		final: { bg: 'bg-amber-500', text: 'text-white' }
 	};
 	const CARD_STAGE_CLR: Record<string, string> = {
 		round32: '#6366f1', round16: '#8b5cf6', quarterfinal: '#a855f7',
-		semifinal: '#d946ef', final: '#f59e0b', '3rd': '#78716c'
+		semifinal: '#d946ef', thirdplace: '#f97316', final: '#f59e0b'
 	};
 	const CARD_STAGE_LBL: Record<string, string> = {
 		round32: '16AVOS', round16: 'OCTAVOS', quarterfinal: 'CUARTOS',
-		semifinal: 'SEMIS', final: 'FINAL', '3rd': '3ER PUESTO'
+		semifinal: 'SEMIS', thirdplace: '3ER PUESTO', final: 'FINAL'
 	};
 
 	// ── Camera / interaction ──
@@ -98,7 +101,7 @@
 
 	// How many cards per side for each stage (for optimal spread computation)
 	const STAGE_COUNT_PER_SIDE: Record<string, number> = {
-		round32: 8, round16: 4, quarterfinal: 2, semifinal: 1, final: 1
+		round32: 8, round16: 4, quarterfinal: 2, semifinal: 1, thirdplace: 1, final: 1
 	};
 
 	// Mesh storage

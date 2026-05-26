@@ -26,18 +26,19 @@ El PDF del torneo anterior usaba este esquema:
 
 > (*) Solo si ambos equipos estan ubicados correctamente en la llave.
 
-## 2. Adaptacion al Mundial 2026 (con Ronda de 32)
+## 2. Adaptacion al Mundial 2026 (con 16avos)
 
-El Mundial 2026 tiene una ronda extra (32avos = dieciseisavos). El sistema debe escalar:
+El Mundial 2026 tiene una ronda extra de 16avos de final. El sistema debe escalar:
 
 | Etapa | Equipo en llave | Resultado* | Exacto* |
 |---|---|---|---|
 | Grupos | — | 1 | +1 |
-| 32avos | 1 | 2 | +2 |
+| 16avos | 1 | 2 | +2 |
 | Octavos | 2 | 3 | +3 |
 | Cuartos | 3 | 4 | +4 |
 | Semifinales | 4 | 5 | +5 |
-| Final/3er puesto | 5 | 6 | +6 |
+| Final por tercer puesto | 5 | 6 | +6 |
+| Final | 5 | 6 | +6 |
 
 ### Bonus especiales
 
@@ -62,7 +63,7 @@ La escala progresiva (2→3→4→5→6) logra que las llaves valgan **mucho mas
 | Etapa | Partidos | Max pts por partido (exacto+llave) | Max total etapa |
 |---|---|---|---|
 | Grupos | 48 | 2 (1+1) | 96 |
-| 32avos | 16 | 5 (1+2+2) | 80 |
+| 16avos | 16 | 5 (1+2+2) | 80 |
 | Octavos | 8 | 8 (2+3+3) | 64 |
 | Cuartos | 4 | 11 (3+4+4) | 44 |
 | Semis | 2 | 14 (4+5+5) | 28 |

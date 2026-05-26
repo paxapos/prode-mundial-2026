@@ -24,6 +24,7 @@ Necesitas estas variables del entorno:
 - TURSO_DATABASE_URL
 - TURSO_AUTH_TOKEN (opcional si la DB no lo requiere)
 - SESSION_DURATION_DAYS (opcional, default 30)
+- BODY_SIZE_LIMIT (opcional, default 30M para permitir imagenes de blog hasta 20 MB)
 - GCP_PROJECT_ID
 - GCP_REGION
 - SERVICE_NAME
@@ -51,6 +52,7 @@ El script:
 - Hace deploy con `gcloud run deploy --source .`
 - Obtiene la URL publica de Cloud Run
 - Configura `ORIGIN` con esa URL
+- Configura `BODY_SIZE_LIMIT` para que SvelteKit acepte formularios de blog con imagen
 
 Tambien puedes pasar otro archivo de variables si quieres:
 

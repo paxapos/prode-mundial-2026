@@ -1,6 +1,6 @@
 import type { ScoringConfig, StageScoringConfig, MatchStage } from '$lib/types';
 
-export const SCORING_STAGES = ['groups', 'round32', 'round16', 'quarterfinal', 'semifinal', 'final'] as const satisfies readonly MatchStage[];
+export const SCORING_STAGES = ['groups', 'round32', 'round16', 'quarterfinal', 'semifinal', 'thirdplace', 'final'] as const satisfies readonly MatchStage[];
 
 const DEFAULT_STAGE_SCORING: Record<MatchStage, StageScoringConfig> = {
 	groups: { outcome: 1, exact: 2, bracketTeam: 0 },
@@ -8,6 +8,7 @@ const DEFAULT_STAGE_SCORING: Record<MatchStage, StageScoringConfig> = {
 	round16: { outcome: 1, exact: 2, bracketTeam: 3 },
 	quarterfinal: { outcome: 1, exact: 2, bracketTeam: 4 },
 	semifinal: { outcome: 1, exact: 2, bracketTeam: 5 },
+	thirdplace: { outcome: 1, exact: 2, bracketTeam: 6 },
 	final: { outcome: 1, exact: 2, bracketTeam: 6 }
 };
 
@@ -20,7 +21,7 @@ export function normalizeScoringConfig(config: unknown): ScoringConfig {
 	const stages = Object.fromEntries(
 		SCORING_STAGES.map((stage) => {
 			const defaults = DEFAULT_STAGE_SCORING[stage];
-			const stageInput = input?.stages?.[stage] ?? {};
+			const stageInput = input?.stages?.[stage] ?? (stage === 'thirdplace' ? input?.stages?.final : undefined) ?? {};
 			return [
 				stage,
 				{
@@ -65,9 +66,10 @@ export function parseScoringConfig(json: string): ScoringConfig {
 /** Human-readable stage names */
 export const STAGE_LABELS: Record<MatchStage, string> = {
 	groups: 'Fase de Grupos',
-	round32: 'Ronda de 32',
+	round32: '16avos de final',
 	round16: 'Octavos de final',
 	quarterfinal: 'Cuartos de final',
 	semifinal: 'Semifinal',
+	thirdplace: 'Final por tercer puesto',
 	final: 'Final'
 };

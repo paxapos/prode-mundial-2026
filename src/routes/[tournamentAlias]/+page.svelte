@@ -151,7 +151,7 @@
 				{#each data.blogPosts as post}
 					<a href="/blog/{post.slug}" class="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md">
 						{#if post.imageUrl}
-							<img src={post.imageUrl} alt={post.title} class="h-32 w-full object-cover" />
+							<img src={post.imageUrl} alt={post.title} loading="lazy" decoding="async" class="h-32 w-full object-cover" />
 						{/if}
 						<div class="p-3">
 							<h3 class="text-sm font-bold text-slate-800 group-hover:text-sky-600">{post.title}</h3>

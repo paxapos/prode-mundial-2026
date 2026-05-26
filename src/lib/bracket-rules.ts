@@ -12,22 +12,22 @@ export interface R32SlotDefinition {
 }
 
 export const R32_DEFS: Record<string, R32SlotDefinition> = {
-	'r32-01': { aGroup: 'A', aPos: 1, bGroup: 'B', bPos: 1, bLabel: '2° B' },
-	'r32-02': { aGroup: 'E', aPos: 0, bLabel: '3° A/B/C/D/F' },
-	'r32-03': { aGroup: 'F', aPos: 0, bGroup: 'C', bPos: 1, bLabel: '2° C' },
-	'r32-04': { aGroup: 'C', aPos: 0, bGroup: 'F', bPos: 1, bLabel: '2° F' },
-	'r32-05': { aGroup: 'I', aPos: 0, bLabel: '3° C/D/F/G/H' },
-	'r32-06': { aGroup: 'E', aPos: 1, bGroup: 'I', bPos: 1, bLabel: '2° I' },
-	'r32-07': { aGroup: 'A', aPos: 0, bLabel: '3° C/E/F/H/I' },
-	'r32-08': { aGroup: 'L', aPos: 0, bLabel: '3° E/H/I/J/K' },
-	'r32-09': { aGroup: 'D', aPos: 0, bLabel: '3° B/E/F/I/J' },
-	'r32-10': { aGroup: 'G', aPos: 0, bLabel: '3° A/E/H/I/J' },
-	'r32-11': { aGroup: 'K', aPos: 1, bGroup: 'L', bPos: 1, bLabel: '2° L' },
-	'r32-12': { aGroup: 'H', aPos: 0, bGroup: 'J', bPos: 1, bLabel: '2° J' },
-	'r32-13': { aGroup: 'B', aPos: 0, bLabel: '3° E/F/G/I/J' },
-	'r32-14': { aGroup: 'J', aPos: 0, bGroup: 'H', bPos: 1, bLabel: '2° H' },
-	'r32-15': { aGroup: 'K', aPos: 0, bLabel: '3° D/E/I/J/L' },
-	'r32-16': { aGroup: 'D', aPos: 1, bGroup: 'G', bPos: 1, bLabel: '2° G' }
+	'r32-01': { aGroup: 'A', aPos: 1, bGroup: 'B', bPos: 1, bLabel: '2° Grupo B' },
+	'r32-02': { aGroup: 'E', aPos: 0, bLabel: '3° Grupo A/B/C/D/F' },
+	'r32-03': { aGroup: 'F', aPos: 0, bGroup: 'C', bPos: 1, bLabel: '2° Grupo C' },
+	'r32-04': { aGroup: 'C', aPos: 0, bGroup: 'F', bPos: 1, bLabel: '2° Grupo F' },
+	'r32-05': { aGroup: 'I', aPos: 0, bLabel: '3° Grupo C/D/F/G/H' },
+	'r32-06': { aGroup: 'E', aPos: 1, bGroup: 'I', bPos: 1, bLabel: '2° Grupo I' },
+	'r32-07': { aGroup: 'A', aPos: 0, bLabel: '3° Grupo C/E/F/H/I' },
+	'r32-08': { aGroup: 'L', aPos: 0, bLabel: '3° Grupo E/H/I/J/K' },
+	'r32-09': { aGroup: 'D', aPos: 0, bLabel: '3° Grupo B/E/F/I/J' },
+	'r32-10': { aGroup: 'G', aPos: 0, bLabel: '3° Grupo A/E/H/I/J' },
+	'r32-11': { aGroup: 'K', aPos: 1, bGroup: 'L', bPos: 1, bLabel: '2° Grupo L' },
+	'r32-12': { aGroup: 'H', aPos: 0, bGroup: 'J', bPos: 1, bLabel: '2° Grupo J' },
+	'r32-13': { aGroup: 'B', aPos: 0, bLabel: '3° Grupo E/F/G/I/J' },
+	'r32-14': { aGroup: 'J', aPos: 0, bGroup: 'H', bPos: 1, bLabel: '2° Grupo H' },
+	'r32-15': { aGroup: 'K', aPos: 0, bLabel: '3° Grupo D/E/I/J/L' },
+	'r32-16': { aGroup: 'D', aPos: 1, bGroup: 'G', bPos: 1, bLabel: '2° Grupo G' }
 };
 
 export const THIRD_PLACE_SLOTS: Record<string, GroupCode[]> = {
@@ -653,15 +653,19 @@ export function compareGroupStandingMetrics(
 	matches: GroupStandingMatchResult[]
 ): number {
 	if (b.points !== a.points) return b.points - a.points;
+	if (b.goalDiff !== a.goalDiff) return b.goalDiff - a.goalDiff;
+	if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
 
-	const tiedTeams = new Set(rows.filter((row) => row.points === a.points).map((row) => row.team));
+	const tiedTeams = new Set(
+		rows
+			.filter((row) => row.points === a.points && row.goalDiff === a.goalDiff && row.goalsFor === a.goalsFor)
+			.map((row) => row.team)
+	);
 	const aHeadToHead = headToHeadStats(a.team, tiedTeams, matches);
 	const bHeadToHead = headToHeadStats(b.team, tiedTeams, matches);
 	if (bHeadToHead.points !== aHeadToHead.points) return bHeadToHead.points - aHeadToHead.points;
 	if (bHeadToHead.goalDiff !== aHeadToHead.goalDiff) return bHeadToHead.goalDiff - aHeadToHead.goalDiff;
 	if (bHeadToHead.goalsFor !== aHeadToHead.goalsFor) return bHeadToHead.goalsFor - aHeadToHead.goalsFor;
-	if (b.goalDiff !== a.goalDiff) return b.goalDiff - a.goalDiff;
-	if (b.goalsFor !== a.goalsFor) return b.goalsFor - a.goalsFor;
 	if (b.tiebreakerPoints !== a.tiebreakerPoints) return b.tiebreakerPoints - a.tiebreakerPoints;
 	return 0;
 }

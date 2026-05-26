@@ -1,0 +1,105 @@
+import { getMatchOutcome, resolveWinner } from '$lib/bracket-rules';
+import { getStageConfig } from '$lib/scoring-config';
+import { getTeamId } from '$lib/teams';
+import type { Match, MatchPointDetail, Prediction, ScoringConfig, SideWinner } from '$lib/types';
+
+export type PredictionPointResult = MatchPointDetail & {
+	exactHit: boolean;
+	outcomeHit: boolean;
+};
+
+export type PredictedMatchTeams = Pick<Match, 'teamA' | 'teamB'>;
+
+function penaltyWinnerTeam(teamA: string, teamB: string, penaltyWinner: SideWinner): string | null {
+	if (penaltyWinner === 'A') return teamA;
+	if (penaltyWinner === 'B') return teamB;
+	return null;
+}
+
+function sameTeam(a: string | null, b: string | null): boolean {
+	return !!a && !!b && getTeamId(a) === getTeamId(b);
+}
+
+function hasExactKnockoutTeams(match: Match, predictedTeams: PredictedMatchTeams): boolean {
+	const predictedTeamSet = new Set([getTeamId(predictedTeams.teamA), getTeamId(predictedTeams.teamB)]);
+	return predictedTeamSet.has(getTeamId(match.teamA)) && predictedTeamSet.has(getTeamId(match.teamB));
+}
+
+export function calculatePredictionPoints(
+	prediction: Prediction,
+	match: Match,
+	config: ScoringConfig,
+	predictedTeams?: PredictedMatchTeams
+): PredictionPointResult | null {
+	if (match.scoreA === null || match.scoreB === null) return null;
+
+	const stageConfig = getStageConfig(config, match.stage);
+	let exactHit = false;
+	let outcomeHit = false;
+	let bracketTeamHit = false;
+	let advancedTeam: string | null = null;
+
+	if (match.stage === 'groups') {
+		const predictedOutcome = getMatchOutcome(prediction.predA, prediction.predB, match.stage, prediction.predPenaltyWinner);
+		const actualOutcome = getMatchOutcome(match.scoreA, match.scoreB, match.stage, match.penaltyWinner);
+		const exactScore = prediction.predA === match.scoreA && prediction.predB === match.scoreB;
+		exactHit = exactScore;
+		outcomeHit = !exactHit && predictedOutcome === actualOutcome;
+	} else if (predictedTeams) {
+		const { winner: actualWinner } = resolveWinner(match.teamA, match.teamB, match.scoreA, match.scoreB, match.penaltyWinner);
+		const { winner: predictedWinner } = resolveWinner(
+			predictedTeams.teamA,
+			predictedTeams.teamB,
+			prediction.predA,
+			prediction.predB,
+			prediction.predPenaltyWinner
+		);
+		const predictedScores = new Map([
+			[getTeamId(predictedTeams.teamA), prediction.predA],
+			[getTeamId(predictedTeams.teamB), prediction.predB]
+		]);
+		const exactTeams = hasExactKnockoutTeams(match, predictedTeams);
+		const exactScore = predictedScores.get(getTeamId(match.teamA)) === match.scoreA && predictedScores.get(getTeamId(match.teamB)) === match.scoreB;
+		const predictedPenaltyTeam = penaltyWinnerTeam(predictedTeams.teamA, predictedTeams.teamB, prediction.predPenaltyWinner);
+		const actualPenaltyTeam = penaltyWinnerTeam(match.teamA, match.teamB, match.penaltyWinner);
+		const exactPenaltyWinner = match.scoreA !== match.scoreB || sameTeam(predictedPenaltyTeam, actualPenaltyTeam);
+
+		advancedTeam = actualWinner;
+		bracketTeamHit = sameTeam(predictedWinner, actualWinner);
+		exactHit = exactTeams && exactScore && exactPenaltyWinner;
+		outcomeHit = !exactHit && exactTeams && bracketTeamHit;
+	}
+
+	const outcomePoints = exactHit || outcomeHit ? stageConfig.outcome : 0;
+	const exactPoints = exactHit ? stageConfig.exact : 0;
+	const bracketPoints = bracketTeamHit ? stageConfig.bracketTeam : 0;
+	const reason = exactHit
+		? 'Resultado exacto'
+		: outcomeHit
+			? 'Acierto de resultado'
+			: bracketTeamHit
+				? 'Equipo que avanza'
+				: 'No acertó';
+
+	return {
+		matchId: match.id,
+		stage: match.stage,
+		teamA: match.teamA,
+		teamB: match.teamB,
+		scoreA: match.scoreA,
+		scoreB: match.scoreB,
+		predA: prediction.predA,
+		predB: prediction.predB,
+		outcomePoints,
+		exactPoints,
+		bracketPoints,
+		totalPoints: outcomePoints + exactPoints + bracketPoints,
+		reason: bracketPoints > 0 && (exactHit || outcomeHit)
+			? `${reason} + equipo avanza: ${advancedTeam ?? 'equipo'} (${bracketPoints}pts)`
+			: bracketPoints > 0
+				? `${reason}: ${advancedTeam ?? 'equipo'} (${bracketPoints}pts)`
+				: reason,
+		exactHit,
+		outcomeHit
+	};
+}

@@ -4,4 +4,5 @@ build
 .git
 .vscode
 .env
+.env.*
 local.db

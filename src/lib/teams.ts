@@ -12,7 +12,7 @@ export const TEAMS: TeamInfo[] = [
 	{ name: 'México', code: 'mx', group: 'A' },
 	{ name: 'Sudáfrica', code: 'za', group: 'A' },
 	{ name: 'Corea del Sur', code: 'kr', group: 'A' },
-	{ name: 'Rep. Checa', code: 'cz', group: 'A' },
+	{ name: 'República Checa', code: 'cz', group: 'A' },
 	// Grupo B
 	{ name: 'Canadá', code: 'ca', group: 'B' },
 	{ name: 'Bosnia y Herzegovina', code: 'ba', group: 'B' },
@@ -60,7 +60,7 @@ export const TEAMS: TeamInfo[] = [
 	{ name: 'Jordania', code: 'jo', group: 'J' },
 	// Grupo K
 	{ name: 'Portugal', code: 'pt', group: 'K' },
-	{ name: 'RD Congo', code: 'cd', group: 'K' },
+	{ name: 'República Democrática del Congo', code: 'cd', group: 'K' },
 	{ name: 'Uzbekistán', code: 'uz', group: 'K' },
 	{ name: 'Colombia', code: 'co', group: 'K' },
 	// Grupo L
@@ -70,15 +70,48 @@ export const TEAMS: TeamInfo[] = [
 	{ name: 'Panamá', code: 'pa', group: 'L' }
 ];
 
+function normalizeTeamLookup(value: string): string {
+	return value
+		.trim()
+		.toLowerCase()
+		.normalize('NFD')
+		.replace(/[\u0300-\u036f]/g, '')
+		.replace(/\s+/g, ' ');
+}
+
+const TEAM_BY_CODE: Record<string, TeamInfo> = {};
+const TEAM_BY_NAME: Record<string, TeamInfo> = {};
+for (const team of TEAMS) {
+	TEAM_BY_CODE[team.code] = team;
+	TEAM_BY_NAME[normalizeTeamLookup(team.name)] = team;
+}
+TEAM_BY_NAME[normalizeTeamLookup('Rep. Checa')] = TEAM_BY_NAME[normalizeTeamLookup('República Checa')];
+TEAM_BY_NAME[normalizeTeamLookup('RD Congo')] = TEAM_BY_NAME[normalizeTeamLookup('República Democrática del Congo')];
+
+export function getTeamInfo(value: string): TeamInfo | null {
+	const trimmed = value.trim();
+	return TEAM_BY_CODE[trimmed] ?? TEAM_BY_NAME[normalizeTeamLookup(trimmed)] ?? null;
+}
+
+export function canonicalTeamName(value: string): string {
+	return getTeamInfo(value)?.name ?? value.trim();
+}
+
+export function getTeamId(value: string): string {
+	return getTeamInfo(value)?.code ?? normalizeTeamLookup(value);
+}
+
 const FLAG_CODES: Record<string, string> = {};
 for (const t of TEAMS) {
 	FLAG_CODES[t.name] = t.code;
 }
+FLAG_CODES['Rep. Checa'] = 'cz';
+FLAG_CODES['RD Congo'] = 'cd';
 
 const VALID_WIDTHS = [20, 40, 80, 160, 320] as const;
 
 export function getFlagUrl(teamName: string, width: number = 80): string {
-	const code = FLAG_CODES[teamName];
+	const code = getTeamInfo(teamName)?.code ?? FLAG_CODES[teamName];
 	if (!code) return '';
 	const w = VALID_WIDTHS.reduce((prev, cur) => (Math.abs(cur - width) < Math.abs(prev - width) ? cur : prev));
 	return `https://flagcdn.com/w${w}/${code}.png`;
@@ -102,10 +135,15 @@ export const VENUES: Record<string, Venue> = {
 	'Lincoln Financial Field': { city: 'Filadelfia', stadium: 'Lincoln Financial Field', capacity: 69796 },
 	'Arrowhead Stadium': { city: 'Kansas City', stadium: 'Arrowhead Stadium', capacity: 76416 },
 	'Gillette Stadium': { city: 'Boston/Foxborough', stadium: 'Gillette Stadium', capacity: 65878 },
-	'Bay Area Stadium': { city: 'San Francisco', stadium: 'Bay Area Stadium', capacity: 68500 },
+	'Levi\'s Stadium': { city: 'San Francisco/Santa Clara', stadium: 'Levi\'s Stadium', capacity: 68500 },
+	'Bay Area Stadium': { city: 'San Francisco/Santa Clara', stadium: 'Levi\'s Stadium', capacity: 68500 },
+	'Estadio BC Place': { city: 'Vancouver', stadium: 'BC Place', capacity: 54500 },
 	'BC Place': { city: 'Vancouver', stadium: 'BC Place', capacity: 54500 },
+	'Estadio Nacional de Canadá': { city: 'Toronto', stadium: 'BMO Field', capacity: 45500 },
 	'BMO Field': { city: 'Toronto', stadium: 'BMO Field', capacity: 45500 },
 	'Estadio Azteca': { city: 'Ciudad de México', stadium: 'Estadio Azteca', capacity: 87523 },
+	'Estadio Chivas': { city: 'Guadalajara', stadium: 'Estadio Akron', capacity: 49850 },
+	'Estadio Monterrey': { city: 'Monterrey', stadium: 'Estadio BBVA', capacity: 53500 },
 	'Estadio BBVA': { city: 'Monterrey', stadium: 'Estadio BBVA', capacity: 53500 },
 	'Estadio Akron': { city: 'Guadalajara', stadium: 'Estadio Akron', capacity: 49850 }
 };

@@ -78,7 +78,7 @@ export const tournamentMatches = sqliteTable(
 		id: text('id').primaryKey(),
 		tournamentId: text('tournament_id').notNull().references(() => tournaments.id, { onDelete: 'cascade' }),
 		stage: text('stage', {
-			enum: ['groups', 'round32', 'round16', 'quarterfinal', 'semifinal', 'final']
+			enum: ['groups', 'round32', 'round16', 'quarterfinal', 'semifinal', 'thirdplace', 'final']
 		}).notNull(),
 		groupCode: text('group_code'),
 		teamA: text('team_a').notNull(),

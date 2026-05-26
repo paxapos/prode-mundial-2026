@@ -61,10 +61,11 @@
 	/* ─── Tabs ──────────────────────────────────────────── */
 	const tabs = [
 		{ id: 'groups', label: 'Grupos', icon: '⚽' },
-		{ id: 'round32', label: '32avos', icon: '🏟️' },
+		{ id: 'round32', label: '16avos', icon: '🏟️' },
 		{ id: 'round16', label: 'Octavos', icon: '🔥' },
 		{ id: 'quarterfinal', label: 'Cuartos', icon: '⚡' },
 		{ id: 'semifinal', label: 'Semis', icon: '🏆' },
+		{ id: 'thirdplace', label: '3er puesto', icon: '🥉' },
 		{ id: 'final', label: 'Final', icon: '👑' }
 	];
 
@@ -556,10 +557,10 @@
 	{/if}
 
 	<!-- ═══ KNOCKOUT STAGES ═══ -->
-	{#each ['round32', 'round16', 'quarterfinal', 'semifinal', 'final'] as stage}
+	{#each ['round32', 'round16', 'quarterfinal', 'semifinal', 'thirdplace', 'final'] as stage}
 		{#if activeTab === stage}
 			{@const stageMatches = knockoutMatches(stage)}
-			<div class="grid gap-4 md:grid-cols-2 {stage === 'final' ? 'lg:grid-cols-1 max-w-2xl mx-auto' : 'lg:grid-cols-2'}">
+			<div class="grid gap-4 md:grid-cols-2 {stage === 'final' || stage === 'thirdplace' ? 'lg:grid-cols-1 max-w-2xl mx-auto' : 'lg:grid-cols-2'}">
 				{#each stageMatches as match}
 					{@const pred = getPred(match.id)}
 					{@const slot = bracket[match.id]}

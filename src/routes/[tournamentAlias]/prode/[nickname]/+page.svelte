@@ -102,6 +102,9 @@
 		if (num !== null && (isNaN(num) || num < 0)) return;
 		const current = preds[matchId] ?? { predA: null, predB: null, predPenaltyWinner: null };
 		preds[matchId] = { ...current, [field]: num };
+		// Guardado con debounce: garantiza persistir aunque el blur no se dispare
+		// (p. ej. en mobile al cerrar el teclado o navegar a otra pestaña).
+		scheduleAutoSave(matchId);
 	}
 
 	function updatePenalty(matchId: string, value: string) {
@@ -114,8 +117,23 @@
 	}
 
 	/* ─── Auto-save ─────────────────────────────────────── */
+	const saveTimers: Record<string, ReturnType<typeof setTimeout>> = {};
+
+	function scheduleAutoSave(matchId: string) {
+		if (!data.canEdit) return;
+		if (saveTimers[matchId]) clearTimeout(saveTimers[matchId]);
+		saveTimers[matchId] = setTimeout(() => {
+			delete saveTimers[matchId];
+			autoSave(matchId);
+		}, 700);
+	}
+
 	async function autoSave(matchId: string) {
 		if (!data.canEdit) return;
+		if (saveTimers[matchId]) {
+			clearTimeout(saveTimers[matchId]);
+			delete saveTimers[matchId];
+		}
 		const pred = preds[matchId];
 		if (!pred || pred.predA === null || pred.predB === null) return;
 
@@ -145,6 +163,40 @@
 		const pred = preds[matchId];
 		if (pred && pred.predA !== null && pred.predB !== null) autoSave(matchId);
 	}
+
+	/**
+	 * Respaldo de guardado: si la página se oculta (cambio de pestaña, minimizar
+	 * la app en mobile, cerrar) con guardados pendientes, los enviamos con
+	 * sendBeacon para que no se pierdan aunque el blur o el debounce no alcancen.
+	 */
+	function flushPending() {
+		if (!data.canEdit) return;
+		for (const matchId of Object.keys(saveTimers)) {
+			clearTimeout(saveTimers[matchId]);
+			delete saveTimers[matchId];
+			const pred = preds[matchId];
+			if (!pred || pred.predA === null || pred.predB === null) continue;
+			const fd = new FormData();
+			fd.set('matchId', matchId);
+			fd.set('predA', String(pred.predA));
+			fd.set('predB', String(pred.predB));
+			fd.set('predPenaltyWinner', pred.predPenaltyWinner ?? '');
+			navigator.sendBeacon?.('?/save', fd);
+		}
+	}
+
+	$effect(() => {
+		if (!data.canEdit) return;
+		const onHide = () => {
+			if (document.visibilityState === 'hidden') flushPending();
+		};
+		document.addEventListener('visibilitychange', onHide);
+		window.addEventListener('pagehide', flushPending);
+		return () => {
+			document.removeEventListener('visibilitychange', onHide);
+			window.removeEventListener('pagehide', flushPending);
+		};
+	});
 
 	function needsPenalty(matchId: string, stage: string): boolean {
 		if (stage === 'groups') return false;

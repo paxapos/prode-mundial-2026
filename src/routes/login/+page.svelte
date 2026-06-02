@@ -77,12 +77,12 @@
 			<form method="POST" action="?/login" class="space-y-4">
 				<div>
 					<Label for="login-email" class="mb-1.5 text-xs font-bold text-slate-500">Email</Label>
-					<Input id="login-email" name="email" type="email" required placeholder="jugador@mail.com" value={form?.action === 'login' ? form?.email : ''} class="!bg-slate-50 placeholder:text-slate-300" />
+					<Input id="login-email" name="email" type="email" required placeholder="jugador@mail.com" value={form?.action === 'login' ? form?.email : ''} class="!bg-slate-50 !text-slate-900 placeholder:text-slate-300" />
 				</div>
 
 				<div>
 					<Label for="login-password" class="mb-1.5 text-xs font-bold text-slate-500">Contraseña</Label>
-					<Input id="login-password" name="password" type="password" minlength={6} maxlength={72} required placeholder="••••••••" class="!bg-slate-50 placeholder:text-slate-300" />
+					<Input id="login-password" name="password" type="password" minlength={6} maxlength={72} required placeholder="••••••••" class="!bg-slate-50 !text-slate-900 placeholder:text-slate-300" />
 				</div>
 
 				<Button type="submit" class="!mt-6 w-full !rounded-xl !py-3 text-sm font-bold" color="green">Entrar</Button>
@@ -92,19 +92,19 @@
 			<form method="POST" action="?/register" class="space-y-4">
 				<div>
 					<Label for="reg-email" class="mb-1.5 text-xs font-bold text-slate-500">Email</Label>
-					<Input id="reg-email" name="email" type="email" required placeholder="jugador@mail.com" value={form?.action === 'register' ? form?.email : ''} class="!bg-slate-50 placeholder:text-slate-300" />
+					<Input id="reg-email" name="email" type="email" required placeholder="jugador@mail.com" value={form?.action === 'register' ? form?.email : ''} class="!bg-slate-50 !text-slate-900 placeholder:text-slate-300" />
 				</div>
 
 				<div>
 					<Label for="reg-password" class="mb-1.5 text-xs font-bold text-slate-500">Contraseña</Label>
-					<Input id="reg-password" name="password" type="password" minlength={6} maxlength={72} required placeholder="Mínimo 6 caracteres" class="!bg-slate-50 placeholder:text-slate-300" />
+					<Input id="reg-password" name="password" type="password" minlength={6} maxlength={72} required placeholder="Mínimo 6 caracteres" class="!bg-slate-50 !text-slate-900 placeholder:text-slate-300" />
 				</div>
 
 				<div>
 					<Label for="reg-nickname" class="mb-1.5 text-xs font-bold text-slate-500">
 						Nickname <span class="text-red-400">*</span>
 					</Label>
-					<Input id="reg-nickname" name="nickname" minlength={3} maxlength={20} required placeholder="ej: elcometrabas" value={form?.action === 'register' ? form?.nickname : ''} class="!bg-slate-50 placeholder:text-slate-300" />
+					<Input id="reg-nickname" name="nickname" minlength={3} maxlength={20} required placeholder="ej: elcometrabas" value={form?.action === 'register' ? form?.nickname : ''} class="!bg-slate-50 !text-slate-900 placeholder:text-slate-300" />
 					<p class="mt-1 text-[11px] text-slate-400">Así te van a ver los demás en las tablas. Debe ser único.</p>
 				</div>
 

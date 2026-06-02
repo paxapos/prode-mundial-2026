@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { compareThirdPlaceMetrics, rankThirdPlacedGroups } from '$lib/bracket-rules';
+	import { rankThirdPlacedGroups } from '$lib/bracket-rules';
 	import { formatMatchDate as formatDate, formatMatchTime as formatTime } from '$lib/match-datetime';
 	import { getFlagUrl, VENUES } from '$lib/teams';
 	import type { Match } from '$lib/types';
@@ -52,13 +52,15 @@
 		const now = new Date();
 		return data.bracketMatches.some((m: Match) => new Date(m.kickoffAt) <= now);
 	});
-	let bestThirdGroups = $derived.by((): Set<string> => {
-		if (!data.groupMatches?.length || !data.groupMatches.every((match: Match) => match.scoreA !== null && match.scoreB !== null)) return new Set();
-
-		const thirds = rankThirdPlacedGroups(data.groups);
-		if (thirds.length < 12 || compareThirdPlaceMetrics(thirds[7].row, thirds[8].row) === 0) return new Set();
-
-		return new Set(thirds.slice(0, 8).map((third) => third.group));
+	/** Ranking de mejores terceros en tiempo real (los 8 mejores clasifican). */
+	const THIRDS_ADVANCE = 8;
+	let thirdPlaceRank = $derived.by(() => {
+		const ranking = rankThirdPlacedGroups(data.groups ?? {});
+		const map: Record<string, { rank: number; advances: boolean }> = {};
+		ranking.forEach((entry, index) => {
+			map[entry.group] = { rank: index + 1, advances: index < THIRDS_ADVANCE };
+		});
+		return map;
 	});
 
 	onMount(() => {
@@ -226,16 +228,17 @@
 							</thead>
 							<tbody class="divide-y divide-slate-50">
 								{#each rows as row, idx}
-									{@const isBestThird = idx === 2 && bestThirdGroups.has(group)}
-									<tr class={idx < 2 || isBestThird ? 'bg-emerald-50/30' : ''}>
+									{@const third = idx === 2 ? thirdPlaceRank[group] : null}
+									<tr class={idx < 2 || third?.advances ? 'bg-emerald-50/30' : idx === 2 ? 'bg-amber-50/30' : ''}>
 										<td class="px-4 py-2.5">
 											<div class="flex items-center gap-2.5">
 												{#if idx < 2}
 													<span class="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">✓</span>
-												{:else if isBestThird}
-													<span class="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white">✓</span>
 												{:else if idx === 2}
-													<span class="flex h-5 w-5 items-center justify-center rounded-full bg-amber-400 text-[10px] font-bold text-white">•</span>
+													<span
+														class="flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold text-white {third?.advances ? 'bg-emerald-500' : 'bg-amber-400'}"
+														title={third ? (third.advances ? `Clasifica como 3ro #${third.rank} de 8` : `3ro #${third.rank} — por ahora no clasifica`) : 'Tercero'}
+													>{third?.rank ?? '•'}</span>
 												{:else}
 													<span class="h-5 w-5"></span>
 												{/if}

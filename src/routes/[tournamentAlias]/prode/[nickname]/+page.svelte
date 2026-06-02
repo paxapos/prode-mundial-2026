@@ -5,6 +5,7 @@
 	const ogImage = $derived(`${$page.url.origin}/og-image.jpg`);
 	import { getFlagUrl, GROUPS, VENUES } from '$lib/teams';
 	import { calcStandings, buildBracket, type LivePred } from '$lib/bracket-engine';
+	import { rankThirdPlacedGroups } from '$lib/bracket-rules';
 	import { formatMatchDate as formatDateShort, formatMatchTime as formatTime } from '$lib/match-datetime';
 	import { STAGE_LABELS } from '$lib/scoring-config';
 	import type { Match, SideWinner } from '$lib/types';
@@ -43,6 +44,17 @@
 	const groupMatches = $derived(data.matches.filter((m: Match) => m.stage === 'groups'));
 	const standings = $derived(calcStandings(groupMatches, preds));
 	const bracket = $derived(buildBracket(data.matches, preds));
+
+	/* ─── Ranking de mejores terceros (los 8 mejores clasifican) ─── */
+	const THIRDS_ADVANCE = 8;
+	const thirdPlaceRank = $derived.by(() => {
+		const ranking = rankThirdPlacedGroups(standings);
+		const map: Record<string, { rank: number; advances: boolean }> = {};
+		ranking.forEach((entry, index) => {
+			map[entry.group] = { rank: index + 1, advances: index < THIRDS_ADVANCE };
+		});
+		return map;
+	});
 
 	const completedCount = $derived(
 		Object.values(preds).filter((p) => p.predA !== null && p.predB !== null).length
@@ -462,13 +474,17 @@
 							</thead>
 							<tbody>
 								{#each groupStandings as row, i}
-									<tr class="border-t border-slate-50 {i < 2 ? 'bg-emerald-50/50' : i === 2 ? 'bg-amber-50/50' : ''}">
+									{@const third = i === 2 ? thirdPlaceRank[group] : null}
+									<tr class="border-t border-slate-50 {i < 2 ? 'bg-emerald-50/50' : i === 2 ? (third?.advances ? 'bg-emerald-50/50' : 'bg-amber-50/50') : ''}">
 										<td class="py-1.5">
 											<div class="flex items-center gap-1.5">
 												{#if i < 2}
 													<span class="inline-flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[8px] font-black text-white">✓</span>
 												{:else if i === 2}
-													<span class="inline-flex h-4 w-4 items-center justify-center rounded-full bg-amber-400 text-[8px] font-black text-white">?</span>
+													<span
+														class="inline-flex h-4 w-4 items-center justify-center rounded-full text-[8px] font-black text-white {third?.advances ? 'bg-emerald-500' : 'bg-amber-400'}"
+														title={third ? (third.advances ? `Clasifica como 3ro #${third.rank} de 8` : `3ro #${third.rank} — por ahora no clasifica`) : 'Tercero'}
+													>{third?.rank ?? '?'}</span>
 												{:else}
 													<span class="inline-flex h-4 w-4"></span>
 												{/if}

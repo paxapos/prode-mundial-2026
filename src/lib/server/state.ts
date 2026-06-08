@@ -1142,39 +1142,66 @@ export async function lockTournament(tournamentId: string, reason: string, actor
 }
 
 export async function getLeaderboard(tournamentId: string): Promise<LeaderboardEntry[]> {
-	const tournament = await getTournamentById(tournamentId);
-	if (!tournament) throw new Error('Liga inexistente.');
-	const sourceId = getSourceId(tournament);
+	const [tournament, members] = await Promise.all([
+		getTournamentById(tournamentId),
+		db
+			.select({
+				userId: userTournaments.userId,
+				user: users
+			})
+			.from(userTournaments)
+			.innerJoin(users, eq(userTournaments.userId, users.id))
+			.where(eq(userTournaments.tournamentId, tournamentId))
+	]);
 
-	const [memberships, predictionRows, matchRows, sourceTournament] = await Promise.all([
-		// Users enrolled in THIS liga/tournament
-		db.select().from(userTournaments).where(eq(userTournaments.tournamentId, tournamentId)),
-		// Predictions from the SOURCE tournament
-		db.select().from(tournamentPredictions).where(eq(tournamentPredictions.tournamentId, sourceId)),
+	if (!tournament) throw new Error('Liga inexistente.');
+	if (members.length === 0) return [];
+	const sourceId = getSourceId(tournament);
+	const memberUserIds = members.map((m) => m.userId);
+
+	const [predictionRows, matchRows, sourceTournament] = await Promise.all([
+		// Predictions from the SOURCE tournament, only for our tournament users!
+		db.select().from(tournamentPredictions).where(
+			and(
+				eq(tournamentPredictions.tournamentId, sourceId),
+				inArray(tournamentPredictions.userId, memberUserIds)
+			)
+		),
 		// Matches from the SOURCE tournament
 		db.select().from(tournamentMatches).where(eq(tournamentMatches.tournamentId, sourceId)),
 		tournament.parentTournamentId ? getTournamentById(sourceId) : Promise.resolve(tournament)
 	]);
+
 	if (!sourceTournament) throw new Error('Competicion inexistente.');
 
-	const memberUserIds = memberships.map((m) => m.userId);
-	const userRows = memberUserIds.length > 0
-		? await db.select().from(users).where(inArray(users.id, memberUserIds))
-		: [];
-	const usersInTournament = userRows.map(toUser);
+	const usersInTournament = members.map((m) => toUser(m.user));
 	const matches = matchRows.map(toMatch);
 	const matchMap = new Map(matches.map((match) => [match.id, match]));
 	const config = sourceTournament.scoringConfig;
+
+	// Pre-process matches for bracket auto-filling once
+	const matchesForBracket = matchesForPredictionBracket(matches);
+
+	// Group user predictions by userId to avoid nested array filtering inside map
+	const predictionsByUser = new Map<string, Prediction[]>();
+	for (const row of predictionRows) {
+		const pred = toPrediction(row);
+		let list = predictionsByUser.get(pred.userId);
+		if (!list) {
+			list = [];
+			predictionsByUser.set(pred.userId, list);
+		}
+		list.push(pred);
+	}
 
 	const board = usersInTournament.map((user) => {
 		let totalPoints = 0;
 		let exactHits = 0;
 		let outcomeHits = 0;
 		let bracketPoints = 0;
-		const userPredictions = predictionRows
-			.filter((item) => String(item.userId) === user.id)
-			.map(toPrediction);
-		const predictedBracket = buildPredictedBracket(matches, userPredictions);
+		const userPredictions = predictionsByUser.get(user.id) ?? [];
+		const livePreds = toLivePreds(userPredictions);
+		const predictedBracket = buildBracket(matchesForBracket, livePreds);
 		for (const prediction of userPredictions) {
 			const match = matchMap.get(prediction.matchId);
 			if (!match) continue;

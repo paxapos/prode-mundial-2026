@@ -73,18 +73,28 @@ export function calcStandings(
 	}
 
 	const result: Record<string, GroupStandingRow[]> = {};
+	const matchesByGroup = new Map<string, Match[]>();
+	for (const match of groupMatches) {
+		const g = match.groupCode ?? '?';
+		let list = matchesByGroup.get(g);
+		if (!list) {
+			list = [];
+			matchesByGroup.set(g, list);
+		}
+		list.push(match);
+	}
+
 	for (const [g, rows] of tables) {
-		const matchesForGroup = groupMatches
-			.filter((match) => match.groupCode === g)
-			.map((match) => {
-				const pred = preds[match.id];
-				return {
-					teamA: match.teamA,
-					teamB: match.teamB,
-					scoreA: pred?.predA ?? null,
-					scoreB: pred?.predB ?? null
-				};
-			});
+		const groupMatchesList = matchesByGroup.get(g) ?? [];
+		const matchesForGroup = groupMatchesList.map((match) => {
+			const pred = preds[match.id];
+			return {
+				teamA: match.teamA,
+				teamB: match.teamB,
+				scoreA: pred?.predA ?? null,
+				scoreB: pred?.predB ?? null
+			};
+		});
 		result[g] = sortGroupStandingRows([...rows.values()], matchesForGroup);
 	}
 	return result;

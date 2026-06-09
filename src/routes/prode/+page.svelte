@@ -6,6 +6,7 @@
 	import { rankThirdPlacedGroups } from '$lib/bracket-rules';
 	import { formatMatchDate as formatDateShort, formatMatchTime as formatTime } from '$lib/match-datetime';
 	import { STAGE_LABELS } from '$lib/scoring-config';
+import type { Match } from '$lib/types';
 
 	let { data } = $props();
 
@@ -102,7 +103,13 @@
 		return preds[matchId] ?? { predA: null, predB: null, predPenaltyWinner: null };
 	}
 
+	function canEditMatch(match: Match): boolean {
+		return data.canEditPredictions === true && !match.isClosed && Date.now() < new Date(match.kickoffAt).getTime();
+	}
+
 	function updateScore(matchId: string, field: 'predA' | 'predB', value: string) {
+		const match = data.matches.find((item: Match) => item.id === matchId);
+		if (!match || !canEditMatch(match)) return;
 		const num = value === '' ? null : parseInt(value, 10);
 		if (num !== null && (isNaN(num) || num < 0)) return;
 		const current = preds[matchId] ?? { predA: null, predB: null, predPenaltyWinner: null };
@@ -110,6 +117,8 @@
 	}
 
 	function updatePenalty(matchId: string, value: string) {
+		const match = data.matches.find((item: Match) => item.id === matchId);
+		if (!match || !canEditMatch(match)) return;
 		const current = preds[matchId] ?? { predA: null, predB: null, predPenaltyWinner: null };
 		preds[matchId] = {
 			...current,
@@ -119,6 +128,8 @@
 
 	/* ─── Auto-save ─────────────────────────────────────── */
 	async function autoSave(matchId: string) {
+		const match = data.matches.find((item: Match) => item.id === matchId);
+		if (!match || !canEditMatch(match)) return;
 		const pred = preds[matchId];
 		if (!pred || pred.predA === null || pred.predB === null) return;
 
@@ -144,6 +155,8 @@
 	}
 
 	function handleBlur(matchId: string) {
+		const match = data.matches.find((item: Match) => item.id === matchId);
+		if (!match || !canEditMatch(match)) return;
 		const pred = preds[matchId];
 		if (pred && pred.predA !== null && pred.predB !== null) autoSave(matchId);
 	}
@@ -346,16 +359,17 @@
 						{#each gMatches as match}
 							{@const pred = getPred(match.id)}
 							{@const status = saveStatus[match.id] ?? 'idle'}
+							{@const matchCanEdit = canEditMatch(match)}
 							<div class="group relative py-2.5">
 								<!-- Date / Venue -->
 								<div class="mb-1.5 flex items-center justify-between text-[10px] text-slate-400">
 									<span>{formatDateShort(match.kickoffAt)} · {formatTime(match.kickoffAt)}</span>
 									<div class="flex items-center gap-1.5">
-										{#if status === 'saving'}
+										{#if matchCanEdit && status === 'saving'}
 											<span class="h-3 w-3 animate-spin rounded-full border-2 border-amber-400 border-t-transparent"></span>
-										{:else if status === 'saved'}
+										{:else if matchCanEdit && status === 'saved'}
 											<span class="text-emerald-500">✓</span>
-										{:else if status === 'error'}
+										{:else if matchCanEdit && status === 'error'}
 											<span class="text-rose-500">✗</span>
 										{/if}
 										<span>{venueCity(match.venue)}</span>
@@ -373,28 +387,40 @@
 									</div>
 
 									<!-- Scores -->
-									<input
-										type="number"
-										min="0"
-										inputmode="numeric"
-										value={pred.predA ?? ''}
-										oninput={(e) => updateScore(match.id, 'predA', e.currentTarget.value)}
-										onblur={() => handleBlur(match.id)}
-										aria-label={`Goles de ${match.teamA}`}
-										class="score-input h-9 w-full rounded-lg border-2 border-slate-200 bg-slate-50 text-center text-sm font-black text-slate-800 transition-all duration-200
-										focus:border-amber-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/30"
-									/>
-									<input
-										type="number"
-										min="0"
-										inputmode="numeric"
-										value={pred.predB ?? ''}
-										oninput={(e) => updateScore(match.id, 'predB', e.currentTarget.value)}
-										onblur={() => handleBlur(match.id)}
-										aria-label={`Goles de ${match.teamB}`}
-										class="score-input h-9 w-full rounded-lg border-2 border-slate-200 bg-slate-50 text-center text-sm font-black text-slate-800 transition-all duration-200
-										focus:border-amber-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/30"
-									/>
+									{#if matchCanEdit}
+										<input
+											type="number"
+											min="0"
+											inputmode="numeric"
+											value={pred.predA ?? ''}
+											oninput={(e) => updateScore(match.id, 'predA', e.currentTarget.value)}
+											onblur={() => handleBlur(match.id)}
+											aria-label={`Goles de ${match.teamA}`}
+											class="score-input h-9 w-full rounded-lg border-2 border-slate-200 bg-slate-50 text-center text-sm font-black text-slate-800 transition-all duration-200
+											focus:border-amber-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/30"
+										/>
+									{:else}
+										<span class="flex h-9 w-full items-center justify-center rounded-lg border-2 border-slate-200 bg-slate-50 text-sm font-black text-slate-800">
+											{pred.predA ?? '-'}
+										</span>
+									{/if}
+									{#if matchCanEdit}
+										<input
+											type="number"
+											min="0"
+											inputmode="numeric"
+											value={pred.predB ?? ''}
+											oninput={(e) => updateScore(match.id, 'predB', e.currentTarget.value)}
+											onblur={() => handleBlur(match.id)}
+											aria-label={`Goles de ${match.teamB}`}
+											class="score-input h-9 w-full rounded-lg border-2 border-slate-200 bg-slate-50 text-center text-sm font-black text-slate-800 transition-all duration-200
+											focus:border-amber-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-400/30"
+										/>
+									{:else}
+										<span class="flex h-9 w-full items-center justify-center rounded-lg border-2 border-slate-200 bg-slate-50 text-sm font-black text-slate-800">
+											{pred.predB ?? '-'}
+										</span>
+									{/if}
 
 									<!-- Team B (left-aligned) -->
 									<div class="flex min-w-0 items-center gap-1.5">
@@ -440,6 +466,7 @@
 					{@const teamB = slot?.teamB ?? match.teamB}
 					{@const isAuto = slot?.autoA || slot?.autoB}
 					{@const status = saveStatus[match.id] ?? 'idle'}
+					{@const matchCanEdit = canEditMatch(match)}
 					{@const isFinalMatch = match.id === 'final'}
 					{@const is3rd = match.id === '3rd'}
 					<div
@@ -466,11 +493,11 @@
 								{/if}
 							</div>
 							<div class="flex items-center gap-1.5">
-								{#if status === 'saving'}
+								{#if matchCanEdit && status === 'saving'}
 									<span class="h-3 w-3 animate-spin rounded-full border-2 border-amber-400 border-t-transparent"></span>
-								{:else if status === 'saved'}
+								{:else if matchCanEdit && status === 'saved'}
 									<span class="text-sm text-emerald-500">✓</span>
-								{:else if status === 'error'}
+								{:else if matchCanEdit && status === 'error'}
 									<span class="text-sm text-rose-500">✗</span>
 								{/if}
 								<span class="text-[10px] text-slate-400">{venueCity(match.venue)}</span>
@@ -491,7 +518,8 @@
 										{/if}
 									</div>
 								</div>
-								<input
+								{#if matchCanEdit}
+									<input
 									type="number"
 									min="0"
 									inputmode="numeric"
@@ -500,7 +528,12 @@
 									onblur={() => handleBlur(match.id)}
 									class="score-input h-10 w-12 rounded-lg border-2 border-slate-200 bg-white text-center text-base font-black
 									focus:border-amber-400 focus:ring-2 focus:ring-amber-400/30"
-								/>
+									/>
+								{:else}
+									<span class="flex h-10 w-12 items-center justify-center rounded-lg border-2 border-slate-200 bg-white text-center text-base font-black text-slate-800">
+										{pred.predA ?? '-'}
+									</span>
+								{/if}
 							</div>
 
 							<!-- VS divider -->
@@ -523,7 +556,8 @@
 										{/if}
 									</div>
 								</div>
-								<input
+								{#if matchCanEdit}
+									<input
 									type="number"
 									min="0"
 									inputmode="numeric"
@@ -532,14 +566,20 @@
 									onblur={() => handleBlur(match.id)}
 									class="score-input h-10 w-12 rounded-lg border-2 border-slate-200 bg-white text-center text-base font-black
 									focus:border-amber-400 focus:ring-2 focus:ring-amber-400/30"
-								/>
+									/>
+								{:else}
+									<span class="flex h-10 w-12 items-center justify-center rounded-lg border-2 border-slate-200 bg-white text-center text-base font-black text-slate-800">
+										{pred.predB ?? '-'}
+									</span>
+								{/if}
 							</div>
 
 							<!-- Penalty selector (shows when draw) -->
 							{#if needsPenalty(match.id, stage)}
 								<div class="overflow-hidden rounded-xl border border-amber-200 bg-amber-50 p-3">
 									<p class="mb-2 text-xs font-bold text-amber-700">⚡ Empate — ¿Quién gana por penales?</p>
-									<div class="grid grid-cols-2 gap-2">
+									{#if matchCanEdit}
+										<div class="grid grid-cols-2 gap-2">
 										<button
 											onclick={() => { updatePenalty(match.id, 'A'); autoSave(match.id); }}
 											class="flex items-center justify-center gap-1.5 rounded-lg border-2 px-3 py-2 text-xs font-bold transition-all
@@ -560,7 +600,12 @@
 											{#if getFlagUrl(teamB)}<img src={getFlagUrl(teamB, 24)} alt="" class="h-3 w-4 rounded-sm object-cover" />{/if}
 											{teamB}
 										</button>
-									</div>
+										</div>
+									{:else}
+										<p class="text-xs text-amber-800">
+											Penales: <span class="font-bold">{pred.predPenaltyWinner === 'A' ? teamA : pred.predPenaltyWinner === 'B' ? teamB : 'Sin definir'}</span>
+										</p>
+									{/if}
 								</div>
 							{/if}
 

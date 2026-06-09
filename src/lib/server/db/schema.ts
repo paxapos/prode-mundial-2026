@@ -127,6 +127,27 @@ export const auditLogs = sqliteTable('audit_logs', {
 	createdAt: text('created_at').notNull()
 });
 
+export const predictionEditUnlocks = sqliteTable(
+	'prediction_edit_unlocks',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		userId: integer('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+		tournamentId: text('tournament_id').notNull().references(() => tournaments.id, { onDelete: 'cascade' }),
+		enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+		reason: text('reason'),
+		createdBy: integer('created_by').references(() => users.id, { onDelete: 'set null' }),
+		createdAt: text('created_at').notNull(),
+		updatedBy: integer('updated_by').references(() => users.id, { onDelete: 'set null' }),
+		updatedAt: text('updated_at').notNull()
+	},
+	(table) => ({
+		userTournamentUnlockIdx: uniqueIndex('prediction_edit_unlocks_user_tournament_idx').on(
+			table.userId,
+			table.tournamentId
+		)
+	})
+);
+
 export const teamGroupAdjustments = sqliteTable(
 	'team_group_adjustments',
 	{

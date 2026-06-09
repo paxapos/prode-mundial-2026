@@ -1,5 +1,5 @@
 import type { Actions, PageServerLoad } from './$types';
-import { lockAction, updateRulesAction } from '$lib/server/admin-actions';
+import { lockAction, unlockAction, updateRulesAction } from '$lib/server/admin-actions';
 import { getScoringRules } from '$lib/server/state';
 
 export const load: PageServerLoad = async ({ parent }) => {
@@ -11,5 +11,6 @@ export const load: PageServerLoad = async ({ parent }) => {
 
 export const actions: Actions = {
 	updateRules: updateRulesAction,
-	lock: lockAction
+	lock: lockAction,
+	unlock: unlockAction
 };

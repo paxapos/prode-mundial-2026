@@ -72,6 +72,11 @@ Reglas de carga:
 - Solo se puede pronosticar antes del inicio del partido.
 - Si el partido ya empezo, el pronostico queda bloqueado.
 - Cada participante puede guardar un solo pronostico por partido (si edita, reemplaza el anterior mientras este abierto).
+- El administrador puede bloquear o desbloquear globalmente la competicion desde Configuracion.
+- Si la competicion esta bloqueada, el administrador puede desbloquear individualmente a un usuario para que edite sus pronosticos de partidos futuros.
+- El desbloqueo individual nunca permite editar un partido que ya comenzo; la validacion por kickoff se mantiene siempre.
+- Cada alta o edicion real de pronostico queda auditada con fecha/hora, partido, valor anterior, valor nuevo y usuario que hizo el cambio.
+- El contador y detalle de cambios por usuario se ve solo desde el listado de usuarios en administracion.
 
 ## 4) Estructura del torneo
 

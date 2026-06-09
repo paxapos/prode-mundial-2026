@@ -69,6 +69,39 @@ export interface Prediction {
 	updatedAt: string;
 }
 
+export interface PredictionEditUnlock {
+	id: string;
+	userId: string;
+	tournamentId: string;
+	enabled: boolean;
+	reason: string | null;
+	createdBy: string | null;
+	createdAt: string;
+	updatedBy: string | null;
+	updatedAt: string;
+}
+
+export interface PredictionChangeAudit {
+	id: string;
+	userId: string;
+	tournamentId: string;
+	matchId: string;
+	matchLabel: string;
+	action: 'prediction_created' | 'prediction_updated';
+	previous: { predA: number; predB: number; predPenaltyWinner: SideWinner } | null;
+	next: { predA: number; predB: number; predPenaltyWinner: SideWinner };
+	changedByUserId: string | null;
+	usedIndividualUnlock: boolean;
+	createdAt: string;
+}
+
+export interface UserPredictionChangeSummary {
+	userId: string;
+	count: number;
+	lastChangedAt: string | null;
+	lastChange: PredictionChangeAudit | null;
+}
+
 /** Detail of how many points a single match awarded */
 export interface MatchPointDetail {
 	matchId: string;

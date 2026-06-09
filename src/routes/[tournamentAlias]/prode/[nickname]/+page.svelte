@@ -108,8 +108,13 @@
 		return preds[matchId] ?? { predA: null, predB: null, predPenaltyWinner: null };
 	}
 
+	function canEditMatch(match: Match): boolean {
+		return data.canEditPredictions && !match.isClosed && Date.now() < new Date(match.kickoffAt).getTime();
+	}
+
 	function updateScore(matchId: string, field: 'predA' | 'predB', value: string) {
-		if (!data.canEdit) return;
+		const match = data.matches.find((item: Match) => item.id === matchId);
+		if (!match || !canEditMatch(match)) return;
 		const num = value === '' ? null : parseInt(value, 10);
 		if (num !== null && (isNaN(num) || num < 0)) return;
 		const current = preds[matchId] ?? { predA: null, predB: null, predPenaltyWinner: null };
@@ -120,7 +125,8 @@
 	}
 
 	function updatePenalty(matchId: string, value: string) {
-		if (!data.canEdit) return;
+		const match = data.matches.find((item: Match) => item.id === matchId);
+		if (!match || !canEditMatch(match)) return;
 		const current = preds[matchId] ?? { predA: null, predB: null, predPenaltyWinner: null };
 		preds[matchId] = {
 			...current,
@@ -132,7 +138,8 @@
 	const saveTimers: Record<string, ReturnType<typeof setTimeout>> = {};
 
 	function scheduleAutoSave(matchId: string) {
-		if (!data.canEdit) return;
+		const match = data.matches.find((item: Match) => item.id === matchId);
+		if (!match || !canEditMatch(match)) return;
 		if (saveTimers[matchId]) clearTimeout(saveTimers[matchId]);
 		saveTimers[matchId] = setTimeout(() => {
 			delete saveTimers[matchId];
@@ -141,7 +148,8 @@
 	}
 
 	async function autoSave(matchId: string) {
-		if (!data.canEdit) return;
+		const match = data.matches.find((item: Match) => item.id === matchId);
+		if (!match || !canEditMatch(match)) return;
 		if (saveTimers[matchId]) {
 			clearTimeout(saveTimers[matchId]);
 			delete saveTimers[matchId];
@@ -171,7 +179,8 @@
 	}
 
 	function handleBlur(matchId: string) {
-		if (!data.canEdit) return;
+		const match = data.matches.find((item: Match) => item.id === matchId);
+		if (!match || !canEditMatch(match)) return;
 		const pred = preds[matchId];
 		if (pred && pred.predA !== null && pred.predB !== null) autoSave(matchId);
 	}
@@ -182,8 +191,10 @@
 	 * sendBeacon para que no se pierdan aunque el blur o el debounce no alcancen.
 	 */
 	function flushPending() {
-		if (!data.canEdit) return;
+		if (!data.canEditPredictions) return;
 		for (const matchId of Object.keys(saveTimers)) {
+			const match = data.matches.find((item: Match) => item.id === matchId);
+			if (!match || !canEditMatch(match)) continue;
 			clearTimeout(saveTimers[matchId]);
 			delete saveTimers[matchId];
 			const pred = preds[matchId];
@@ -198,7 +209,7 @@
 	}
 
 	$effect(() => {
-		if (!data.canEdit) return;
+		if (!data.canEditPredictions) return;
 		const onHide = () => {
 			if (document.visibilityState === 'hidden') flushPending();
 		};
@@ -511,12 +522,13 @@
 						{#each gMatches as match}
 							{@const pred = getPred(match.id)}
 							{@const status = saveStatus[match.id] ?? 'idle'}
+							{@const matchCanEdit = canEditMatch(match)}
 							<div class="group relative py-2.5">
 								<!-- Date / Venue -->
 								<div class="mb-1.5 flex items-center justify-between text-[10px] text-slate-400">
 									<span>{formatDateShort(match.kickoffAt)} · {formatTime(match.kickoffAt)}</span>
 									<div class="flex items-center gap-1.5">
-										{#if data.canEdit}
+										{#if matchCanEdit}
 											{#if status === 'saving'}
 												<span class="h-3 w-3 animate-spin rounded-full border-2 border-amber-400 border-t-transparent"></span>
 											{:else if status === 'saved'}
@@ -540,7 +552,7 @@
 									</div>
 
 									<!-- Scores -->
-									{#if data.canEdit}
+									{#if matchCanEdit}
 										<input
 											type="number"
 											min="0"
@@ -557,7 +569,7 @@
 											{pred.predA ?? '-'}
 										</span>
 									{/if}
-									{#if data.canEdit}
+									{#if matchCanEdit}
 										<input
 											type="number"
 											min="0"
@@ -619,6 +631,7 @@
 					{@const teamB = slot?.teamB ?? match.teamB}
 					{@const isAuto = slot?.autoA || slot?.autoB}
 					{@const status = saveStatus[match.id] ?? 'idle'}
+					{@const matchCanEdit = canEditMatch(match)}
 					{@const isFinalMatch = match.id === 'final'}
 					{@const is3rd = match.id === '3rd'}
 					<div
@@ -645,7 +658,7 @@
 								{/if}
 							</div>
 							<div class="flex items-center gap-1.5">
-								{#if data.canEdit}
+								{#if matchCanEdit}
 									{#if status === 'saving'}
 										<span class="h-3 w-3 animate-spin rounded-full border-2 border-amber-400 border-t-transparent"></span>
 									{:else if status === 'saved'}
@@ -672,7 +685,7 @@
 										{/if}
 									</div>
 								</div>
-								{#if data.canEdit}
+								{#if matchCanEdit}
 									<input
 										type="number"
 										min="0"
@@ -710,7 +723,7 @@
 										{/if}
 									</div>
 								</div>
-								{#if data.canEdit}
+								{#if matchCanEdit}
 									<input
 										type="number"
 										min="0"
@@ -732,7 +745,7 @@
 							{#if needsPenalty(match.id, stage)}
 								<div class="overflow-hidden rounded-xl border border-amber-200 bg-amber-50 p-3">
 									<p class="mb-2 text-xs font-bold text-amber-700">⚡ Empate — ¿Quién gana por penales?</p>
-									{#if data.canEdit}
+									{#if matchCanEdit}
 										<div class="grid grid-cols-2 gap-2">
 											<button
 												onclick={() => { updatePenalty(match.id, 'A'); autoSave(match.id); }}

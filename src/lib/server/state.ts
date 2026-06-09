@@ -8,11 +8,14 @@ import type {
 	Match,
 	MatchPointDetail,
 	Prediction,
+	PredictionChangeAudit,
+	PredictionEditUnlock,
 	ScoringConfig,
 	SideWinner,
 	Tournament,
 	TournamentSettings,
 	User,
+	UserPredictionChangeSummary,
 	UserRole,
 	BlogPost
 } from '$lib/types';
@@ -36,6 +39,7 @@ import { db } from '$lib/server/db/client';
 import {
 	auditLogs,
 	blogPosts,
+	predictionEditUnlocks,
 	teamGroupAdjustments,
 	tournaments,
 	tournamentMatches,
@@ -137,6 +141,20 @@ function toPrediction(row: typeof tournamentPredictions.$inferSelect): Predictio
 		predB: row.predB,
 		predPenaltyWinner: (row.predPenaltyWinner as SideWinner) ?? null,
 		createdAt: row.createdAt,
+		updatedAt: row.updatedAt
+	};
+}
+
+function toPredictionEditUnlock(row: typeof predictionEditUnlocks.$inferSelect): PredictionEditUnlock {
+	return {
+		id: String(row.id),
+		userId: String(row.userId),
+		tournamentId: row.tournamentId,
+		enabled: row.enabled,
+		reason: row.reason ?? null,
+		createdBy: row.createdBy === null ? null : String(row.createdBy),
+		createdAt: row.createdAt,
+		updatedBy: row.updatedBy === null ? null : String(row.updatedBy),
 		updatedAt: row.updatedAt
 	};
 }
@@ -920,6 +938,32 @@ export async function listPredictionsForUser(userId: string, tournamentId: strin
 	return rows.map(toPrediction);
 }
 
+async function getActivePredictionUnlock(userId: string, tournamentId: string): Promise<PredictionEditUnlock | null> {
+	const sourceId = await getSourceTournamentId(tournamentId);
+	const [row] = await db
+		.select()
+		.from(predictionEditUnlocks)
+		.where(
+			and(
+				eq(predictionEditUnlocks.userId, Number(userId)),
+				eq(predictionEditUnlocks.tournamentId, sourceId),
+				eq(predictionEditUnlocks.enabled, true)
+			)
+		)
+		.limit(1);
+	return row ? toPredictionEditUnlock(row) : null;
+}
+
+export async function canUserEditPredictions(userId: string, tournamentId: string): Promise<boolean> {
+	const tournament = await getTournamentById(tournamentId);
+	if (!tournament) return false;
+	const sourceId = getSourceId(tournament);
+	const sourceTournament = tournament.parentTournamentId ? await getTournamentById(sourceId) : tournament;
+	if (!sourceTournament) return false;
+	if (!(await isTournamentLocked(sourceTournament))) return true;
+	return (await getActivePredictionUnlock(userId, sourceId)) !== null;
+}
+
 export async function savePrediction(input: {
 	userId: string;
 	tournamentId: string;
@@ -927,13 +971,17 @@ export async function savePrediction(input: {
 	predA: number;
 	predB: number;
 	predPenaltyWinner: SideWinner;
+	actorUserId?: string;
 }): Promise<Prediction> {
 	const tournament = await getTournamentById(input.tournamentId);
 	if (!tournament) throw new Error('Liga inexistente.');
 	const sourceId = getSourceId(tournament);
 	const sourceTournament = tournament.parentTournamentId ? await getTournamentById(sourceId) : tournament;
 	if (!sourceTournament) throw new Error('Competicion inexistente.');
-	if (await isTournamentLocked(sourceTournament)) throw new Error('La competicion esta bloqueada.');
+	const usedIndividualUnlock = await isTournamentLocked(sourceTournament);
+	if (usedIndividualUnlock && !(await getActivePredictionUnlock(input.userId, sourceId))) {
+		throw new Error('La competicion esta bloqueada para este usuario.');
+	}
 
 	// Check user is enrolled in source or any liga
 	const memberships = await listUserTournamentIds(input.userId);
@@ -942,7 +990,7 @@ export async function savePrediction(input: {
 
 	const [match] = await db.select().from(tournamentMatches).where(eq(tournamentMatches.id, input.matchId)).limit(1);
 	if (!match || match.tournamentId !== sourceId) throw new Error('Partido inexistente.');
-	if (Date.now() >= new Date(match.kickoffAt).getTime()) throw new Error('Este partido ya comenzo y no admite cambios.');
+	if (match.isClosed || Date.now() >= new Date(match.kickoffAt).getTime()) throw new Error('Este partido ya comenzo y no admite cambios.');
 	if (input.predA < 0 || input.predB < 0) throw new Error('Los goles no pueden ser negativos.');
 
 	const [existing] = await db
@@ -959,11 +1007,26 @@ export async function savePrediction(input: {
 
 	const now = new Date().toISOString();
 	if (existing) {
+		const previous = { predA: existing.predA, predB: existing.predB, predPenaltyWinner: (existing.predPenaltyWinner as SideWinner) ?? null };
 		const [updated] = await db
 			.update(tournamentPredictions)
 			.set({ predA: input.predA, predB: input.predB, predPenaltyWinner: input.predPenaltyWinner, updatedAt: now })
 			.where(eq(tournamentPredictions.id, existing.id))
 			.returning();
+		await createAuditLog({
+			userId: input.actorUserId ? Number(input.actorUserId) : Number(input.userId),
+			action: 'prediction_updated',
+			entityType: 'prediction',
+			entityId: String(updated.id),
+			payload: {
+				userId: input.userId,
+				tournamentId: sourceId,
+				matchId: input.matchId,
+				previous,
+				next: { predA: updated.predA, predB: updated.predB, predPenaltyWinner: (updated.predPenaltyWinner as SideWinner) ?? null },
+				usedIndividualUnlock
+			}
+		});
 		return toPrediction(updated);
 	}
 
@@ -980,7 +1043,209 @@ export async function savePrediction(input: {
 			updatedAt: now
 		})
 		.returning();
+	await createAuditLog({
+		userId: input.actorUserId ? Number(input.actorUserId) : Number(input.userId),
+		action: 'prediction_created',
+		entityType: 'prediction',
+		entityId: String(created.id),
+		payload: {
+			userId: input.userId,
+			tournamentId: sourceId,
+			matchId: input.matchId,
+			previous: null,
+			next: { predA: created.predA, predB: created.predB, predPenaltyWinner: (created.predPenaltyWinner as SideWinner) ?? null },
+			usedIndividualUnlock
+		}
+	});
 	return toPrediction(created);
+}
+
+export async function unlockTournament(tournamentId: string, actorUserId?: string): Promise<TournamentSettings> {
+	const sourceId = await getSourceTournamentId(tournamentId);
+	const [updated] = await db
+		.update(tournaments)
+		.set({ state: 'open_predictions', lockReason: null })
+		.where(eq(tournaments.id, sourceId))
+		.returning();
+	if (!updated) throw new Error('Competicion inexistente.');
+
+	await createAuditLog({
+		userId: actorUserId ? Number(actorUserId) : null,
+		action: 'tournament_unlocked',
+		entityType: 'tournament',
+		entityId: sourceId,
+		payload: {}
+	});
+
+	return getTournamentSettings(sourceId);
+}
+
+export async function setUserPredictionUnlock(input: {
+	userId: string;
+	tournamentId: string;
+	reason?: string;
+	actorUserId: string;
+}): Promise<PredictionEditUnlock> {
+	const sourceId = await getSourceTournamentId(input.tournamentId);
+	const now = new Date().toISOString();
+	const [row] = await db
+		.insert(predictionEditUnlocks)
+		.values({
+			userId: Number(input.userId),
+			tournamentId: sourceId,
+			enabled: true,
+			reason: input.reason?.trim() || null,
+			createdBy: Number(input.actorUserId),
+			createdAt: now,
+			updatedBy: Number(input.actorUserId),
+			updatedAt: now
+		})
+		.onConflictDoUpdate({
+			target: [predictionEditUnlocks.userId, predictionEditUnlocks.tournamentId],
+			set: {
+				enabled: true,
+				reason: input.reason?.trim() || null,
+				updatedBy: Number(input.actorUserId),
+				updatedAt: now
+			}
+		})
+		.returning();
+
+	await createAuditLog({
+		userId: Number(input.actorUserId),
+		action: 'prediction_unlock_enabled',
+		entityType: 'prediction_edit_unlock',
+		entityId: `${sourceId}::${input.userId}`,
+		payload: { userId: input.userId, tournamentId: sourceId, reason: input.reason?.trim() || null }
+	});
+
+	return toPredictionEditUnlock(row);
+}
+
+export async function disableUserPredictionUnlock(input: {
+	userId: string;
+	tournamentId: string;
+	actorUserId: string;
+}): Promise<void> {
+	const sourceId = await getSourceTournamentId(input.tournamentId);
+	const now = new Date().toISOString();
+	await db
+		.update(predictionEditUnlocks)
+		.set({ enabled: false, updatedBy: Number(input.actorUserId), updatedAt: now })
+		.where(and(eq(predictionEditUnlocks.userId, Number(input.userId)), eq(predictionEditUnlocks.tournamentId, sourceId)));
+
+	await createAuditLog({
+		userId: Number(input.actorUserId),
+		action: 'prediction_unlock_disabled',
+		entityType: 'prediction_edit_unlock',
+		entityId: `${sourceId}::${input.userId}`,
+		payload: { userId: input.userId, tournamentId: sourceId }
+	});
+}
+
+export async function listPredictionUnlocksForTournament(tournamentId: string): Promise<PredictionEditUnlock[]> {
+	const sourceId = await getSourceTournamentId(tournamentId);
+	const rows = await db.select().from(predictionEditUnlocks).where(eq(predictionEditUnlocks.tournamentId, sourceId));
+	return rows.map(toPredictionEditUnlock);
+}
+
+function parsePredictionAuditPayload(payloadJson: string): {
+	userId: string;
+	tournamentId: string;
+	matchId: string;
+	previous: PredictionChangeAudit['previous'];
+	next: PredictionChangeAudit['next'];
+	usedIndividualUnlock: boolean;
+} | null {
+	try {
+		const payload = JSON.parse(payloadJson) as {
+			userId?: string | number;
+			tournamentId?: string;
+			matchId?: string;
+			previous?: PredictionChangeAudit['previous'];
+			next?: PredictionChangeAudit['next'];
+			usedIndividualUnlock?: boolean;
+		};
+		if (!payload.userId || !payload.tournamentId || !payload.matchId || !payload.next) return null;
+		return {
+			userId: String(payload.userId),
+			tournamentId: payload.tournamentId,
+			matchId: payload.matchId,
+			previous: payload.previous ?? null,
+			next: payload.next,
+			usedIndividualUnlock: payload.usedIndividualUnlock ?? false
+		};
+	} catch {
+		return null;
+	}
+}
+
+export async function listPredictionChangeAuditForUser(userId: string, tournamentId: string): Promise<PredictionChangeAudit[]> {
+	const sourceId = await getSourceTournamentId(tournamentId);
+	const [rows, matches] = await Promise.all([
+		db
+			.select()
+			.from(auditLogs)
+			.where(inArray(auditLogs.action, ['prediction_created', 'prediction_updated']))
+			.orderBy(desc(auditLogs.createdAt), desc(auditLogs.id)),
+		listMatches(sourceId)
+	]);
+	const matchLabels = new Map(matches.map((match) => [match.id, `${match.teamA} vs ${match.teamB}`]));
+
+	return rows.flatMap((row) => {
+		const payload = parsePredictionAuditPayload(row.payloadJson);
+		if (!payload || payload.userId !== userId || payload.tournamentId !== sourceId) return [];
+		return [{
+			id: String(row.id),
+			userId: payload.userId,
+			tournamentId: payload.tournamentId,
+			matchId: payload.matchId,
+			matchLabel: matchLabels.get(payload.matchId) ?? payload.matchId,
+			action: row.action as PredictionChangeAudit['action'],
+			previous: payload.previous,
+			next: payload.next,
+			changedByUserId: row.userId === null ? null : String(row.userId),
+			usedIndividualUnlock: payload.usedIndividualUnlock,
+			createdAt: row.createdAt
+		}];
+	});
+}
+
+export async function listUserPredictionChangeSummaries(tournamentId: string): Promise<UserPredictionChangeSummary[]> {
+	const sourceId = await getSourceTournamentId(tournamentId);
+	const rows = await db
+		.select()
+		.from(auditLogs)
+		.where(inArray(auditLogs.action, ['prediction_created', 'prediction_updated']))
+		.orderBy(desc(auditLogs.createdAt), desc(auditLogs.id));
+	const summaries = new Map<string, UserPredictionChangeSummary>();
+
+	for (const row of rows) {
+		const payload = parsePredictionAuditPayload(row.payloadJson);
+		if (!payload || payload.tournamentId !== sourceId) continue;
+		const current = summaries.get(payload.userId);
+		const change: PredictionChangeAudit = {
+			id: String(row.id),
+			userId: payload.userId,
+			tournamentId: payload.tournamentId,
+			matchId: payload.matchId,
+			matchLabel: payload.matchId,
+			action: row.action as PredictionChangeAudit['action'],
+			previous: payload.previous,
+			next: payload.next,
+			changedByUserId: row.userId === null ? null : String(row.userId),
+			usedIndividualUnlock: payload.usedIndividualUnlock,
+			createdAt: row.createdAt
+		};
+
+		if (!current) {
+			summaries.set(payload.userId, { userId: payload.userId, count: 1, lastChangedAt: row.createdAt, lastChange: change });
+		} else {
+			current.count += 1;
+		}
+	}
+
+	return [...summaries.values()];
 }
 
 export async function setMatchResult(input: {
@@ -1142,66 +1407,39 @@ export async function lockTournament(tournamentId: string, reason: string, actor
 }
 
 export async function getLeaderboard(tournamentId: string): Promise<LeaderboardEntry[]> {
-	const [tournament, members] = await Promise.all([
-		getTournamentById(tournamentId),
-		db
-			.select({
-				userId: userTournaments.userId,
-				user: users
-			})
-			.from(userTournaments)
-			.innerJoin(users, eq(userTournaments.userId, users.id))
-			.where(eq(userTournaments.tournamentId, tournamentId))
-	]);
-
+	const tournament = await getTournamentById(tournamentId);
 	if (!tournament) throw new Error('Liga inexistente.');
-	if (members.length === 0) return [];
 	const sourceId = getSourceId(tournament);
-	const memberUserIds = members.map((m) => m.userId);
 
-	const [predictionRows, matchRows, sourceTournament] = await Promise.all([
-		// Predictions from the SOURCE tournament, only for our tournament users!
-		db.select().from(tournamentPredictions).where(
-			and(
-				eq(tournamentPredictions.tournamentId, sourceId),
-				inArray(tournamentPredictions.userId, memberUserIds)
-			)
-		),
+	const [memberships, predictionRows, matchRows, sourceTournament] = await Promise.all([
+		// Users enrolled in THIS liga/tournament
+		db.select().from(userTournaments).where(eq(userTournaments.tournamentId, tournamentId)),
+		// Predictions from the SOURCE tournament
+		db.select().from(tournamentPredictions).where(eq(tournamentPredictions.tournamentId, sourceId)),
 		// Matches from the SOURCE tournament
 		db.select().from(tournamentMatches).where(eq(tournamentMatches.tournamentId, sourceId)),
 		tournament.parentTournamentId ? getTournamentById(sourceId) : Promise.resolve(tournament)
 	]);
-
 	if (!sourceTournament) throw new Error('Competicion inexistente.');
 
-	const usersInTournament = members.map((m) => toUser(m.user));
+	const memberUserIds = memberships.map((m) => m.userId);
+	const userRows = memberUserIds.length > 0
+		? await db.select().from(users).where(inArray(users.id, memberUserIds))
+		: [];
+	const usersInTournament = userRows.map(toUser);
 	const matches = matchRows.map(toMatch);
 	const matchMap = new Map(matches.map((match) => [match.id, match]));
 	const config = sourceTournament.scoringConfig;
-
-	// Pre-process matches for bracket auto-filling once
-	const matchesForBracket = matchesForPredictionBracket(matches);
-
-	// Group user predictions by userId to avoid nested array filtering inside map
-	const predictionsByUser = new Map<string, Prediction[]>();
-	for (const row of predictionRows) {
-		const pred = toPrediction(row);
-		let list = predictionsByUser.get(pred.userId);
-		if (!list) {
-			list = [];
-			predictionsByUser.set(pred.userId, list);
-		}
-		list.push(pred);
-	}
 
 	const board = usersInTournament.map((user) => {
 		let totalPoints = 0;
 		let exactHits = 0;
 		let outcomeHits = 0;
 		let bracketPoints = 0;
-		const userPredictions = predictionsByUser.get(user.id) ?? [];
-		const livePreds = toLivePreds(userPredictions);
-		const predictedBracket = buildBracket(matchesForBracket, livePreds);
+		const userPredictions = predictionRows
+			.filter((item) => String(item.userId) === user.id)
+			.map(toPrediction);
+		const predictedBracket = buildPredictedBracket(matches, userPredictions);
 		for (const prediction of userPredictions) {
 			const match = matchMap.get(prediction.matchId);
 			if (!match) continue;

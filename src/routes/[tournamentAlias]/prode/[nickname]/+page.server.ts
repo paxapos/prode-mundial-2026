@@ -6,6 +6,7 @@ import {
 	getTournamentByAlias,
 	getTournamentSettings,
 	getUserByNickname,
+	canUserEditPredictions,
 	listMatches,
 	listPredictionsForUser,
 	listUserTournamentIds,
@@ -30,6 +31,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 	const isOwner = currentUser?.id === profileUser.id;
 	const isAdmin = currentUser?.role === 'admin';
 	const canEdit = isOwner || isAdmin;
+	const canEditPredictions = canEdit ? await canUserEditPredictions(profileUser.id, tournament.id) : false;
 
 	const settings = await getTournamentSettings(tournament.id);
 	const tournamentStarted = Date.now() >= new Date(settings.tournamentStartAt).getTime();
@@ -43,6 +45,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 		settings,
 		matchDetails: canViewPredictions ? await getPlayerMatchDetails(profileUser.id, tournament.id) : [],
 		canEdit,
+		canEditPredictions,
 		isOwner,
 		canViewPredictions
 	};
@@ -82,7 +85,8 @@ export const actions: Actions = {
 				matchId,
 				predA,
 				predB,
-				predPenaltyWinner
+				predPenaltyWinner,
+				actorUserId: currentUser.id
 			});
 			return { ok: true };
 		} catch (err) {

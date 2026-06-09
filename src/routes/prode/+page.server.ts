@@ -2,6 +2,7 @@ import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
 import type { SideWinner } from '$lib/types';
 import {
+	canUserEditPredictions,
 	getActiveTournament,
 	getPlayerMatchDetails,
 	getTournamentSettings,
@@ -43,7 +44,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		matches: await listMatches(source.id),
 		predictions: await listPredictionsForUser(locals.user.id, source.id),
 		settings: await getTournamentSettings(source.id),
-		matchDetails: await getPlayerMatchDetails(locals.user.id, source.id)
+		matchDetails: await getPlayerMatchDetails(locals.user.id, source.id),
+		canEditPredictions: await canUserEditPredictions(locals.user.id, source.id)
 	};
 };
 
@@ -78,7 +80,8 @@ export const actions: Actions = {
 				matchId,
 				predA,
 				predB,
-				predPenaltyWinner
+				predPenaltyWinner,
+				actorUserId: locals.user.id
 			});
 			return { ok: true };
 		} catch (error) {

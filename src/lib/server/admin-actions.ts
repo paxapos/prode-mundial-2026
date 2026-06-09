@@ -10,10 +10,13 @@ import {
 	createUserByAdmin,
 	clearMatchResult,
 	deleteBlogPost,
+	disableUserPredictionUnlock,
+	setUserPredictionUnlock,
 	lockTournament,
 	removeUserFromTournament,
 	setGroupAdjustment,
 	setMatchResult,
+	unlockTournament,
 	updateBlogPost,
 	updateMatchTeams,
 	updateScoringRules,
@@ -151,8 +154,51 @@ export async function lockAction({ request, locals }: RequestEvent) {
 	const data = await request.formData();
 	const tournamentId = String(data.get('tournamentId') ?? '');
 	const reason = String(data.get('reason') ?? 'Bloqueo manual por administracion.');
-	await lockTournament(tournamentId, reason, user.id);
-	return { ok: true };
+	try {
+		await lockTournament(tournamentId, reason, user.id);
+		return { ok: true };
+	} catch (err) {
+		return fail(400, { message: err instanceof Error ? err.message : 'No se pudo bloquear la competicion.' });
+	}
+}
+
+export async function unlockAction({ request, locals }: RequestEvent) {
+	const user = requireAdmin(locals);
+	const data = await request.formData();
+	const tournamentId = String(data.get('tournamentId') ?? '');
+	try {
+		await unlockTournament(tournamentId, user.id);
+		return { ok: true };
+	} catch (err) {
+		return fail(400, { message: err instanceof Error ? err.message : 'No se pudo desbloquear la competicion.' });
+	}
+}
+
+export async function enableUserPredictionUnlockAction({ request, locals }: RequestEvent) {
+	const user = requireAdmin(locals);
+	const data = await request.formData();
+	const userId = String(data.get('userId') ?? '');
+	const tournamentId = String(data.get('tournamentId') ?? '');
+	const reason = String(data.get('reason') ?? '');
+	try {
+		await setUserPredictionUnlock({ userId, tournamentId, reason, actorUserId: user.id });
+		return { ok: true };
+	} catch (err) {
+		return fail(400, { message: err instanceof Error ? err.message : 'No se pudo desbloquear al usuario.' });
+	}
+}
+
+export async function disableUserPredictionUnlockAction({ request, locals }: RequestEvent) {
+	const user = requireAdmin(locals);
+	const data = await request.formData();
+	const userId = String(data.get('userId') ?? '');
+	const tournamentId = String(data.get('tournamentId') ?? '');
+	try {
+		await disableUserPredictionUnlock({ userId, tournamentId, actorUserId: user.id });
+		return { ok: true };
+	} catch (err) {
+		return fail(400, { message: err instanceof Error ? err.message : 'No se pudo rebloquear al usuario.' });
+	}
 }
 
 export async function createUserAction({ request, locals }: RequestEvent) {

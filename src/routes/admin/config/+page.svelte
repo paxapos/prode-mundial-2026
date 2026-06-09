@@ -36,14 +36,20 @@
 
 	<div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
 		<h2 class="mb-1 text-lg font-black text-slate-800">Bloqueo de la competición</h2>
-		<p class="mb-4 text-xs text-slate-400">Bloqueá los pronósticos manualmente. Esto impide que los jugadores editen sus predicciones.</p>
+		<p class="mb-4 text-xs text-slate-400">Bloqueá o desbloqueá los pronósticos manualmente. Los partidos ya comenzados nunca admiten cambios.</p>
 		{#if data.settings?.state === 'locked'}
 			<div class="mb-4 rounded-lg border border-red-200 bg-red-50 p-3"><p class="text-xs font-bold text-red-700">🔒 Competición actualmente bloqueada</p>{#if data.settings.lockReason}<p class="mt-1 text-xs text-red-600">Motivo: {data.settings.lockReason}</p>{/if}</div>
+			<form method="POST" action="?/unlock" use:enhance class="mb-4">
+				<input type="hidden" name="tournamentId" value={data.selectedTournament?.id} />
+				<button type="submit" class="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-700">🔓 Desbloquear pronósticos</button>
+			</form>
 		{/if}
-		<form method="POST" action="?/lock" use:enhance class="space-y-3">
-			<input type="hidden" name="tournamentId" value={data.selectedTournament?.id} />
-			<div><span class="mb-1 block text-xs font-bold text-slate-500">Motivo del bloqueo</span><input name="reason" placeholder="Comenzó el Mundial" class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:border-red-400 focus:ring-2 focus:ring-red-400/20" /></div>
-			<button type="submit" class="w-full rounded-lg bg-red-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-red-700">🔒 Bloquear pronósticos</button>
-		</form>
+		{#if data.settings?.state !== 'locked'}
+			<form method="POST" action="?/lock" use:enhance class="space-y-3">
+				<input type="hidden" name="tournamentId" value={data.selectedTournament?.id} />
+				<div><span class="mb-1 block text-xs font-bold text-slate-500">Motivo del bloqueo</span><input name="reason" placeholder="Comenzó el Mundial" class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:border-red-400 focus:ring-2 focus:ring-red-400/20" /></div>
+				<button type="submit" class="w-full rounded-lg bg-red-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-red-700">🔒 Bloquear pronósticos</button>
+			</form>
+		{/if}
 	</div>
 </div>

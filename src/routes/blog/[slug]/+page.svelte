@@ -166,6 +166,7 @@
 		class="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm transition-opacity duration-300"
 		class:opacity-100={showModal}
 		onclick={handleModalClick}
+		onkeydown={(e) => { if (e.key === 'Escape') closeModal(); }}
 		ontouchstart={handleTouchStart}
 		ontouchmove={handleTouchMove}
 		ontouchend={handleTouchEnd}
@@ -173,6 +174,7 @@
 		role="dialog"
 		aria-modal="true"
 		aria-label="Imagen ampliada"
+		tabindex="-1"
 	>
 		<button type="button" onclick={closeModal} class="absolute right-4 top-4 z-10 rounded-full bg-white/10 p-2 text-white backdrop-blur-sm transition-colors hover:bg-white/20" aria-label="Cerrar">
 			<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">

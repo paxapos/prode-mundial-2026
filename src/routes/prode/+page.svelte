@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { deserialize } from '$app/forms';
 	import { Badge } from 'flowbite-svelte';
 	import { getFlagUrl, GROUPS, VENUES } from '$lib/teams';
@@ -30,7 +31,7 @@ import type { Match } from '$lib/types';
 	// Predictions keyed by matchId
 	let preds: Record<string, LivePred> = $state(
 		Object.fromEntries(
-			data.predictions.map((p: { matchId: string; predA: number; predB: number; predPenaltyWinner: import('$lib/types').SideWinner }) => [
+			untrack(() => data).predictions.map((p: { matchId: string; predA: number; predB: number; predPenaltyWinner: import('$lib/types').SideWinner }) => [
 				p.matchId,
 				{ predA: p.predA, predB: p.predB, predPenaltyWinner: p.predPenaltyWinner }
 			])

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { rankThirdPlacedGroups } from '$lib/bracket-rules';
 	import { formatMatchDate as formatDate, formatMatchTime as formatTime } from '$lib/match-datetime';
 	import { getFlagUrl, VENUES } from '$lib/teams';
@@ -76,7 +76,7 @@
 		{ key: 'groups', label: 'Grupos', emoji: '⚽' },
 		{ key: 'bracket', label: 'Llaves', emoji: '🏆' }
 	] as const;
-	let activeTab = $state<'groups' | 'bracket'>(shouldAutoScroll ? 'bracket' : 'groups');
+	let activeTab = $state<'groups' | 'bracket'>(untrack(() => shouldAutoScroll) ? 'bracket' : 'groups');
 </script>
 
 <svelte:head>

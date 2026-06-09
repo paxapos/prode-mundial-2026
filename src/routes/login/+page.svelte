@@ -1,9 +1,10 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { Alert, Button, Input, Label } from 'flowbite-svelte';
 
 	let { form, data } = $props();
 
-	let mode = $state<'login' | 'register'>(form?.action === 'register' ? 'register' : 'login');
+	let mode = $state<'login' | 'register'>(untrack(() => form)?.action === 'register' ? 'register' : 'login');
 </script>
 
 <svelte:head>

@@ -3,6 +3,7 @@ import type { Actions, PageServerLoad } from './$types';
 import type { SideWinner } from '$lib/types';
 import {
 	getPlayerMatchDetails,
+	getPlayerGroupStageDetails,
 	getTournamentByAlias,
 	getTournamentSettings,
 	getUserByNickname,
@@ -35,7 +36,8 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 
 	const settings = await getTournamentSettings(tournament.id);
 	const tournamentStarted = Date.now() >= new Date(settings.tournamentStartAt).getTime();
-	const canViewPredictions = isOwner || isAdmin || tournamentStarted;
+	const currentUserCanEdit = currentUser ? await canUserEditPredictions(currentUser.id, tournament.id) : true;
+	const canViewPredictions = isOwner || isAdmin || tournamentStarted || !currentUserCanEdit;
 
 	return {
 		tournament,
@@ -44,6 +46,9 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 		predictions: canViewPredictions ? await listPredictionsForUser(profileUser.id, tournament.id) : [],
 		settings,
 		matchDetails: canViewPredictions ? await getPlayerMatchDetails(profileUser.id, tournament.id) : [],
+		groupStageDetails: canViewPredictions
+			? await getPlayerGroupStageDetails(profileUser.id, tournament.id)
+			: { totalPoints: 0, details: [] },
 		canEdit,
 		canEditPredictions,
 		isOwner,

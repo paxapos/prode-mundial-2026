@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { and, asc, count, desc, eq, inArray, isNull, isNotNull, sql } from 'drizzle-orm';
 import sanitizeHtml from 'sanitize-html';
 import type {
+	GroupStagePointResult,
 	GroupStandingRow,
 	LeaderboardEntry,
 	Match,
@@ -1701,6 +1702,24 @@ export async function getPlayerMatchDetails(userId: string, tournamentId: string
 	}
 
 	return details.sort((a, b) => b.totalPoints - a.totalPoints);
+}
+
+/** Desglose del puntaje por clasificación de grupos de un jugador */
+export async function getPlayerGroupStageDetails(userId: string, tournamentId: string): Promise<GroupStagePointResult> {
+	const tournament = await getTournamentById(tournamentId);
+	if (!tournament) return { totalPoints: 0, details: [] };
+	const sourceId = getSourceId(tournament);
+	const sourceTournament = tournament.parentTournamentId ? await getTournamentById(sourceId) : tournament;
+	if (!sourceTournament) return { totalPoints: 0, details: [] };
+	const [predRows, matchRows] = await Promise.all([
+		db.select().from(tournamentPredictions).where(
+			and(eq(tournamentPredictions.userId, Number(userId)), eq(tournamentPredictions.tournamentId, sourceId))
+		),
+		db.select().from(tournamentMatches).where(eq(tournamentMatches.tournamentId, sourceId))
+	]);
+	const matches = matchRows.map(toMatch);
+	const predictions = predRows.map(toPrediction);
+	return calculateGroupStagePoints(predictions, matches, sourceTournament.scoringConfig);
 }
 
 export async function updateMatchTeams(input: {

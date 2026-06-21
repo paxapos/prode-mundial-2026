@@ -20,7 +20,8 @@
 
 	/* ─── Points summary ────────────────────────────────── */
 	const myTotalPoints = $derived(
-		(data.matchDetails ?? []).reduce((sum: number, d: { totalPoints: number }) => sum + d.totalPoints, 0)
+		(data.matchDetails ?? []).reduce((sum: number, d: { totalPoints: number }) => sum + d.totalPoints, 0) +
+			(data.groupStageDetails?.totalPoints ?? 0)
 	);
 	const matchPointsMap = $derived<Record<string, { outcomePoints: number; exactPoints: number; bracketPoints: number; totalPoints: number; reason: string }>>(
 		Object.fromEntries(
@@ -110,7 +111,8 @@
 	}
 
 	function canEditMatch(match: Match): boolean {
-		return data.canEditPredictions && !match.isClosed && Date.now() < new Date(match.kickoffAt).getTime();
+		const tenMinutesBeforeKickoff = new Date(match.kickoffAt).getTime() - 10 * 60 * 1000;
+		return data.canEditPredictions && !match.isClosed && Date.now() < tenMinutesBeforeKickoff;
 	}
 
 	function updateScore(matchId: string, field: 'predA' | 'predB', value: string) {
@@ -351,7 +353,7 @@
 									<div class="py-2.5">
 										<div class="grid grid-cols-[minmax(0,1fr)_2.5rem_2.5rem_minmax(0,1fr)] items-center gap-1.5 sm:gap-2">
 											<div class="flex min-w-0 items-center justify-end gap-1.5">
-												<span class="truncate text-right text-sm font-semibold text-slate-800">{match.teamA}</span>
+												<span class="truncate text-right text-xs sm:text-sm font-semibold text-slate-800" title={match.teamA}>{match.teamA}</span>
 												{#if getFlagUrl(match.teamA)}
 													<img src={getFlagUrl(match.teamA, 40)} alt="" class="h-5 w-7 shrink-0 rounded-sm object-cover" />
 												{/if}
@@ -362,7 +364,7 @@
 												{#if getFlagUrl(match.teamB)}
 													<img src={getFlagUrl(match.teamB, 40)} alt="" class="h-5 w-7 shrink-0 rounded-sm object-cover" />
 												{/if}
-												<span class="truncate text-sm font-semibold text-slate-800">{match.teamB}</span>
+												<span class="truncate text-xs sm:text-sm font-semibold text-slate-800" title={match.teamB}>{match.teamB}</span>
 											</div>
 										</div>
 									</div>
@@ -425,6 +427,27 @@
 						<span class="text-slate-500"> bracket</span>
 					</div>
 				{/if}
+				{#if (data.groupStageDetails?.totalPoints ?? 0) > 0}
+					<div class="rounded-lg bg-white/80 px-3 py-1.5 shadow-sm">
+						<span class="font-bold text-amber-600">{data.groupStageDetails.totalPoints}</span>
+						<span class="text-slate-500"> posición grupos</span>
+					</div>
+				{/if}
+			</div>
+		</div>
+	{/if}
+
+	{#if (data.groupStageDetails?.totalPoints ?? 0) > 0}
+		<div class="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 shadow-sm">
+			<p class="mb-2 text-sm font-bold text-slate-700">Posiciones acertadas en grupos (+{data.groupStageDetails.totalPoints})</p>
+			<div class="flex flex-wrap gap-2">
+				{#each data.groupStageDetails.details.filter((d) => d.hit) as d (d.groupCode + '-' + d.position)}
+					<span class="rounded-lg bg-white px-3 py-1.5 text-xs shadow-sm">
+						<span class="font-bold text-slate-700">Grupo {d.groupCode}</span>
+						<span class="text-slate-500"> · {d.position}° {d.predictedTeam}</span>
+						<span class="font-bold text-amber-600"> +{d.points}</span>
+					</span>
+				{/each}
 			</div>
 		</div>
 	{/if}
@@ -527,7 +550,16 @@
 							<div class="group relative py-2.5">
 								<!-- Date / Venue -->
 								<div class="mb-1.5 flex items-center justify-between text-[10px] text-slate-400">
-									<span>{formatDateShort(match.kickoffAt)} · {formatTime(match.kickoffAt)}</span>
+									<div class="flex items-center gap-1.5">
+										<span>{formatDateShort(match.kickoffAt)} · {formatTime(match.kickoffAt)}</span>
+										{#if !matchCanEdit && data.canEditPredictions && !match.isClosed}
+											{@const kickoffTime = new Date(match.kickoffAt).getTime()}
+											{@const tenMinutesBefore = kickoffTime - 10 * 60 * 1000}
+											{#if Date.now() >= tenMinutesBefore && Date.now() < kickoffTime}
+												<span class="rounded bg-rose-100 px-1.5 py-0.5 text-[8px] font-bold text-rose-700">⏳ Bloqueado (Faltan menos de 10m)</span>
+											{/if}
+										{/if}
+									</div>
 									<div class="flex items-center gap-1.5">
 										{#if matchCanEdit}
 											{#if status === 'saving'}
@@ -546,7 +578,7 @@
 								<div class="grid grid-cols-[minmax(0,1fr)_2.5rem_2.5rem_minmax(0,1fr)] items-center gap-1.5 sm:gap-2">
 									<!-- Team A (right-aligned) -->
 									<div class="flex min-w-0 items-center justify-end gap-1.5">
-										<span class="truncate text-right text-sm font-semibold text-slate-800">{match.teamA}</span>
+										<span class="truncate text-right text-xs sm:text-sm font-semibold text-slate-800" title={match.teamA}>{match.teamA}</span>
 										{#if getFlagUrl(match.teamA)}
 											<img src={getFlagUrl(match.teamA, 40)} alt="" class="h-5 w-7 shrink-0 rounded-sm object-cover shadow-sm" />
 										{/if}
@@ -593,7 +625,7 @@
 										{#if getFlagUrl(match.teamB)}
 											<img src={getFlagUrl(match.teamB, 40)} alt="" class="h-5 w-7 shrink-0 rounded-sm object-cover shadow-sm" />
 										{/if}
-										<span class="truncate text-sm font-semibold text-slate-800">{match.teamB}</span>
+										<span class="truncate text-xs sm:text-sm font-semibold text-slate-800" title={match.teamB}>{match.teamB}</span>
 									</div>
 								</div>
 
@@ -645,7 +677,7 @@
 					>
 						<!-- Match header -->
 						<div class="flex items-center justify-between px-4 py-2.5 {isFinalMatch ? 'bg-amber-100/60' : is3rd ? 'bg-orange-100/60' : 'bg-slate-50'}">
-							<div class="flex items-center gap-2">
+							<div class="flex flex-wrap items-center gap-2">
 								{#if isFinalMatch}
 									<span class="text-lg">👑</span>
 									<span class="text-xs font-bold text-amber-700">FINAL</span>
@@ -656,6 +688,13 @@
 									<span class="text-xs font-medium text-slate-500">
 										{formatDateShort(match.kickoffAt)} · {formatTime(match.kickoffAt)}
 									</span>
+								{/if}
+								{#if !matchCanEdit && data.canEditPredictions && !match.isClosed}
+									{@const kickoffTime = new Date(match.kickoffAt).getTime()}
+									{@const tenMinutesBefore = kickoffTime - 10 * 60 * 1000}
+									{#if Date.now() >= tenMinutesBefore && Date.now() < kickoffTime}
+										<span class="rounded bg-rose-100 px-1.5 py-0.5 text-[8px] font-bold text-rose-700">⏳ Bloqueado (Faltan menos de 10m)</span>
+									{/if}
 								{/if}
 							</div>
 							<div class="flex items-center gap-1.5">

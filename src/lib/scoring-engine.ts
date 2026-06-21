@@ -1,5 +1,5 @@
-import { getMatchOutcome, resolveWinner } from '$lib/bracket-rules';
-import { calcStandings, type LivePred } from '$lib/bracket-engine';
+import { getMatchOutcome, resolveWinner, R32_DEFS } from '$lib/bracket-rules';
+import { buildBracket, type LivePred } from '$lib/bracket-engine';
 import { getStageConfig } from '$lib/scoring-config';
 import { getTeamId } from '$lib/teams';
 import type {
@@ -113,14 +113,26 @@ export function calculatePredictionPoints(
 	};
 }
 
-// 1° y 2° (clasificación directa). El 3° (mejores terceros) queda pendiente de definir.
-const SCORED_GROUP_POSITIONS = [0, 1] as const;
+/** Etiqueta legible de un casillero de 16avos (1°/2° de grupo o mejor 3°). */
+function r32SlotLabel(matchId: string, side: 'A' | 'B'): string {
+	const def = R32_DEFS[matchId];
+	if (!def) return side === 'A' ? 'Lado A' : 'Lado B';
+	if (side === 'A') return `${def.aPos === 0 ? '1°' : '2°'} Grupo ${def.aGroup}`;
+	return def.bLabel;
+}
 
 /**
- * Puntaje por acertar la posición en la tabla final de cada grupo.
- * Compara los standings pronosticados (derivados de los pronósticos del usuario)
- * contra los reales (derivados de los resultados cargados). Solo puntúa grupos
- * completos (todos sus partidos con resultado) y las posiciones 1°, 2° y 3°.
+ * Puntaje por acertar quién clasifica a 16avos, casillero por casillero.
+ *
+ * Modelo: cada partido de 16avos tiene 2 casilleros (lados A y B). En total 32 casilleros
+ * (12 primeros de grupo + 12 segundos + 8 mejores terceros). Por cada casillero donde el
+ * equipo pronosticado coincide con el equipo real que terminó ahí, se suma
+ * `groups.bracketTeam`. El bracket real ya refleja desempates (`tiebreakerPoints`) y overrides
+ * manuales del admin, porque viene de los partidos sincronizados.
+ *
+ * Solo se evalúa un casillero cuando está resuelto de ambos lados: el equipo real es un equipo
+ * de verdad (no un placeholder tipo "2° Grupo A") y el pronóstico del usuario resolvió ese
+ * casillero (`autoA/autoB` del bracket pronosticado).
  */
 export function calculateGroupStagePoints(
 	prediction: Prediction[],
@@ -129,46 +141,49 @@ export function calculateGroupStagePoints(
 ): GroupStagePointResult {
 	const pointsPerSlot = config.stages.groups.bracketTeam;
 	const groupMatches = matches.filter((m) => m.stage === 'groups');
-	if (pointsPerSlot <= 0 || groupMatches.length === 0) return { totalPoints: 0, details: [] };
+	const r32Matches = matches.filter((m) => m.stage === 'round32');
+	if (pointsPerSlot <= 0 || r32Matches.length === 0 || groupMatches.length === 0) {
+		return { totalPoints: 0, details: [] };
+	}
+
+	const realTeams = new Set<string>();
+	for (const m of groupMatches) {
+		realTeams.add(getTeamId(m.teamA));
+		realTeams.add(getTeamId(m.teamB));
+	}
 
 	const userPreds: Record<string, LivePred> = {};
 	for (const p of prediction) {
 		userPreds[p.matchId] = { predA: p.predA, predB: p.predB, predPenaltyWinner: p.predPenaltyWinner };
 	}
-	const actualPreds: Record<string, LivePred> = {};
-	for (const m of groupMatches) {
-		if (m.scoreA !== null && m.scoreB !== null) {
-			actualPreds[m.id] = { predA: m.scoreA, predB: m.scoreB, predPenaltyWinner: m.penaltyWinner };
-		}
-	}
-
-	const predictedStandings = calcStandings(groupMatches, userPreds);
-	const actualStandings = calcStandings(groupMatches, actualPreds);
-
-	const matchesByGroup = new Map<string, Match[]>();
-	for (const m of groupMatches) {
-		const g = m.groupCode ?? '?';
-		const list = matchesByGroup.get(g) ?? [];
-		list.push(m);
-		matchesByGroup.set(g, list);
-	}
+	const predictedBracket = buildBracket(matches, userPreds);
 
 	const details: GroupPositionPointDetail[] = [];
 	let totalPoints = 0;
 
-	for (const [g, gMatches] of matchesByGroup) {
-		const complete = gMatches.length > 0 && gMatches.every((m) => actualPreds[m.id] !== undefined);
-		if (!complete) continue;
-		const predicted = predictedStandings[g] ?? [];
-		const actual = actualStandings[g] ?? [];
-		for (const idx of SCORED_GROUP_POSITIONS) {
-			const predTeam = predicted[idx]?.team;
-			const actTeam = actual[idx]?.team;
-			if (!predTeam || !actTeam) continue;
-			const hit = getTeamId(predTeam) === getTeamId(actTeam);
+	for (const match of r32Matches) {
+		const predicted = predictedBracket[match.id];
+		if (!predicted) continue;
+		const sides = [
+			{ side: 'A' as const, actual: match.teamA, predTeam: predicted.teamA, resolved: predicted.autoA },
+			{ side: 'B' as const, actual: match.teamB, predTeam: predicted.teamB, resolved: predicted.autoB }
+		];
+		for (const slot of sides) {
+			// Casillero resuelto de ambos lados (pronóstico y resultado real).
+			if (!slot.resolved) continue;
+			if (!realTeams.has(getTeamId(slot.actual)) || !realTeams.has(getTeamId(slot.predTeam))) continue;
+			const hit = getTeamId(slot.predTeam) === getTeamId(slot.actual);
 			const points = hit ? pointsPerSlot : 0;
 			totalPoints += points;
-			details.push({ groupCode: g, position: idx + 1, predictedTeam: predTeam, actualTeam: actTeam, hit, points });
+			details.push({
+				matchId: match.id,
+				side: slot.side,
+				slotLabel: r32SlotLabel(match.id, slot.side),
+				predictedTeam: slot.predTeam,
+				actualTeam: slot.actual,
+				hit,
+				points
+			});
 		}
 	}
 

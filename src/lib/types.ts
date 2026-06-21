@@ -177,18 +177,21 @@ export interface BlogPost {
 	updatedAt: string;
 }
 
-/** Una posición de grupo evaluada para puntaje de clasificación */
+/** Un casillero de 16avos evaluado para puntaje de clasificación */
 export interface GroupPositionPointDetail {
-	groupCode: string;
-	/** 1, 2 o 3 */
-	position: number;
+	/** id del partido de 16avos (ej. 'r32-07') */
+	matchId: string;
+	/** lado del casillero */
+	side: 'A' | 'B';
+	/** etiqueta legible del casillero (ej. '1° Grupo A', '2° Grupo B', '3° Grupo C/E/F/H/I') */
+	slotLabel: string;
 	predictedTeam: string;
 	actualTeam: string;
 	hit: boolean;
 	points: number;
 }
 
-/** Resultado del puntaje por clasificación en fase de grupos de un usuario */
+/** Resultado del puntaje por clasificación a 16avos (casilleros) de un usuario */
 export interface GroupStagePointResult {
 	totalPoints: number;
 	details: GroupPositionPointDetail[];

@@ -7,50 +7,54 @@ try {
 	const { normalizeScoringConfig } = await server.ssrLoadModule('/src/lib/scoring-config.ts');
 	const config = normalizeScoringConfig({ stages: { groups: { outcome: 1, exact: 1, bracketTeam: 2 } } });
 
-	const teams = ['Argentina', 'Brasil', 'Chile', 'Peru'];
-	const pair = (a, b) => ({
-		id: `A-${a}-${b}`, tournamentId: 't', stage: 'groups', groupCode: 'A',
-		teamA: teams[a], teamB: teams[b], kickoffAt: '2026-06-10T00:00:00.000Z',
-		venue: null, penaltyWinner: null, isClosed: true
-	});
-	// 6 partidos del grupo. Resultados REALES: orden final Argentina>Brasil>Chile>Peru
-	const matches = [
-		{ ...pair(0, 1), scoreA: 2, scoreB: 0 }, // ARG vence BRA
-		{ ...pair(0, 2), scoreA: 2, scoreB: 0 }, // ARG vence CHI
-		{ ...pair(0, 3), scoreA: 2, scoreB: 0 }, // ARG vence PER
-		{ ...pair(1, 2), scoreA: 1, scoreB: 0 }, // BRA vence CHI
-		{ ...pair(1, 3), scoreA: 1, scoreB: 0 }, // BRA vence PER
-		{ ...pair(2, 3), scoreA: 1, scoreB: 0 } //  CHI vence PER
-	];
-	// real: ARG 9, BRA 6, CHI 3, PER 0 -> 1°ARG 2°BRA 3°CHI
+	// Dos grupos completos. Orden real: A) Argentina>Brasil>Chile>Peru  B) Francia>Alemania>Italia>Espana
+	const groupTeams = { A: ['Argentina', 'Brasil', 'Chile', 'Peru'], B: ['Francia', 'Alemania', 'Italia', 'Espana'] };
+	const groupMatches = [];
+	for (const [g, teams] of Object.entries(groupTeams)) {
+		// round-robin: el de índice menor le gana al de índice mayor -> orden = teams[0]>teams[1]>teams[2]>teams[3]
+		for (let i = 0; i < teams.length; i++) {
+			for (let j = i + 1; j < teams.length; j++) {
+				groupMatches.push({
+					id: `${g}-${i}-${j}`, tournamentId: 't', stage: 'groups', groupCode: g,
+					teamA: teams[i], teamB: teams[j], kickoffAt: '2026-06-10T00:00:00.000Z',
+					venue: null, scoreA: 1, scoreB: 0, penaltyWinner: null, isClosed: true
+				});
+			}
+		}
+	}
+	// Casillero r32-01 = 2° Grupo A vs 2° Grupo B. Equipos REALES (sincronizados): Brasil y Alemania.
+	const r3201 = {
+		id: 'r32-01', tournamentId: 't', stage: 'round32', groupCode: null,
+		teamA: 'Brasil', teamB: 'Alemania', kickoffAt: '2026-06-30T00:00:00.000Z',
+		venue: null, scoreA: null, scoreB: null, penaltyWinner: null, isClosed: false
+	};
+	const matches = [...groupMatches, r3201];
 
 	const mkPred = (m, a, b) => ({
 		id: `p-${m.id}`, userId: 'u', tournamentId: 't', matchId: m.id,
 		predA: a, predB: b, predPenaltyWinner: null,
 		createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z'
 	});
-	// Pronóstico: acierta ARG 1° y BRA 2°, pero invierte CHI/PER (no acierta 3°)
-	const predictions = [
-		mkPred(matches[0], 2, 0), // ARG>BRA
-		mkPred(matches[1], 2, 0), // ARG>CHI
-		mkPred(matches[2], 2, 0), // ARG>PER
-		mkPred(matches[3], 1, 0), // BRA>CHI
-		mkPred(matches[4], 1, 0), // BRA>PER
-		mkPred(matches[5], 0, 1) //  PER>CHI  (invierte el 3°)
-	];
 
-	const res = calculateGroupStagePoints(predictions, matches, config);
-	// 1° y 2° acertados = 2 casilleros * 2pts = 4; 3° fallado = 0
-	assert.equal(res.totalPoints, 4, `esperaba 4, dio ${res.totalPoints}`);
-	const hits = res.details.filter((d) => d.hit).map((d) => d.position).sort();
-	assert.deepEqual(hits, [1, 2], 'deben acertar posiciones 1 y 2');
-	// El 3° queda diferido: no debe evaluarse ninguna posición 3
-	assert.ok(!res.details.some((d) => d.position === 3), 'el 3° no debe puntuar (diferido)');
+	// Participante 1: pronostica el MISMO orden -> su bracket pone Brasil (2°A) y Alemania (2°B) en r32-01.
+	const predsSame = groupMatches.map((m) => mkPred(m, 1, 0));
+	const res1 = calculateGroupStagePoints(predsSame, matches, config);
+	assert.equal(res1.totalPoints, 4, `acertar los 2 casilleros del partido = 4, dio ${res1.totalPoints}`);
+	assert.equal(res1.details.filter((d) => d.hit).length, 2, 'deben acertar los 2 lados de r32-01');
 
-	// Grupo incompleto no puntúa
-	const incompleteMatches = matches.map((m, i) => (i === 0 ? { ...m, scoreA: null, scoreB: null } : m));
-	const res2 = calculateGroupStagePoints(predictions, incompleteMatches, config);
-	assert.equal(res2.totalPoints, 0, 'grupo incompleto no debe puntuar');
+	// Participante 2: invierte Italia/Alemania en grupo B -> 2°B pasa a ser Italia -> falla el lado B.
+	const predsFlipB = groupMatches.map((m) => {
+		// partido Alemania(idx1) vs Italia(idx2) del grupo B: hacer ganar a Italia
+		if (m.groupCode === 'B' && m.teamA === 'Alemania' && m.teamB === 'Italia') return mkPred(m, 0, 1);
+		return mkPred(m, 1, 0);
+	});
+	const res2 = calculateGroupStagePoints(predsFlipB, matches, config);
+	assert.equal(res2.totalPoints, 2, `acertar 1 de 2 casilleros = 2, dio ${res2.totalPoints}`);
+
+	// Casillero sin resolver (equipos reales aún placeholders) no puntúa.
+	const matchesUnresolved = [...groupMatches, { ...r3201, teamA: '2° Grupo A', teamB: '2° Grupo B' }];
+	const res3 = calculateGroupStagePoints(predsSame, matchesUnresolved, config);
+	assert.equal(res3.totalPoints, 0, 'casillero con equipos reales sin resolver no debe puntuar');
 
 	console.log('OK verify-group-scoring');
 } finally {

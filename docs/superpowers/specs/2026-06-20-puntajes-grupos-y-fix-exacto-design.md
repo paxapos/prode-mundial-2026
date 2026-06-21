@@ -98,10 +98,22 @@ Se detectaron dos problemas:
 ## Confirmado (revisión del spec, 2026-06-20 / 2026-06-21)
 
 1. **exact:1 en todas las fases** (no solo grupos). Cada torneo igual se ajusta desde admin.
-2. **Grupos:** puntúan **1° y 2°** (clasificación directa), por posición exacta, valor `groups.bracketTeam`.
-3. **3° (mejores terceros):** **diferido** — se define más adelante. Por ahora NO puntúa
-   (`SCORED_GROUP_POSITIONS = [0, 1]`).
-4. **4ª posición:** no puntúa.
+2. **Modelo de casilleros de 16avos (definitivo, 2026-06-21):** el puntaje de clasificación NO
+   es por "posición de tabla" sino por **casillero del bracket de 16avos**. Cada partido de
+   16avos tiene 2 casilleros (lados A y B) → 32 casilleros = **12 primeros + 12 segundos +
+   8 mejores terceros** (ver `R32_DEFS`). Por cada casillero donde el equipo pronosticado
+   coincide con el equipo real que terminó ahí, se suma `groups.bracketTeam` (objetivo: 2).
+   Acertar los 2 equipos de un partido = 4.
+3. **Mejores 3°: casillero exacto.** El bracket real ya asigna los 8 mejores terceros vía
+   `resolveBestThirds` (Annex C FIFA) y respeta `tiebreakerPoints` (tabla cruzada de terceros,
+   `compareThirdPlaceMetrics`) + overrides manuales. El scoring compara el bracket pronosticado
+   de cada participante contra ese bracket real.
+4. **De octavos a la final:** "quién pasa" ya se puntúa con el `bracketTeam` de cada fase
+   (existente, sin cambios), porque quién llena el casillero de octavos = quién ganó su 16avo.
+5. **Implementación:** `calculateGroupStagePoints` ahora recorre los partidos `round32`,
+   compara `buildBracket(predicciones)` vs los equipos reales sincronizados del partido, y
+   suma `groups.bracketTeam` por casillero resuelto de ambos lados. Detalle por casillero
+   (`GroupPositionPointDetail`: `matchId`, `side`, `slotLabel`, `predictedTeam`, `actualTeam`).
 
 ### Hallazgos de la validación con datos reales (2026-06-21)
 

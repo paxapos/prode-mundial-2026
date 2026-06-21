@@ -430,7 +430,7 @@
 				{#if (data.groupStageDetails?.totalPoints ?? 0) > 0}
 					<div class="rounded-lg bg-white/80 px-3 py-1.5 shadow-sm">
 						<span class="font-bold text-amber-600">{data.groupStageDetails.totalPoints}</span>
-						<span class="text-slate-500"> posición grupos</span>
+						<span class="text-slate-500"> clasif. 16avos</span>
 					</div>
 				{/if}
 			</div>
@@ -439,12 +439,12 @@
 
 	{#if (data.groupStageDetails?.totalPoints ?? 0) > 0}
 		<div class="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 shadow-sm">
-			<p class="mb-2 text-sm font-bold text-slate-700">Posiciones acertadas en grupos (+{data.groupStageDetails.totalPoints})</p>
+			<p class="mb-2 text-sm font-bold text-slate-700">Casilleros de 16avos acertados (+{data.groupStageDetails.totalPoints})</p>
 			<div class="flex flex-wrap gap-2">
-				{#each data.groupStageDetails.details.filter((d) => d.hit) as d (d.groupCode + '-' + d.position)}
+				{#each data.groupStageDetails.details.filter((d) => d.hit) as d (d.matchId + d.side)}
 					<span class="rounded-lg bg-white px-3 py-1.5 text-xs shadow-sm">
-						<span class="font-bold text-slate-700">Grupo {d.groupCode}</span>
-						<span class="text-slate-500"> · {d.position}° {d.predictedTeam}</span>
+						<span class="font-bold text-slate-700">{d.slotLabel}</span>
+						<span class="text-slate-500"> · {d.predictedTeam}</span>
 						<span class="font-bold text-amber-600"> +{d.points}</span>
 					</span>
 				{/each}

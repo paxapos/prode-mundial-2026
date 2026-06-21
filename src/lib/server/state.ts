@@ -10,6 +10,7 @@ import type {
 	Prediction,
 	PredictionChangeAudit,
 	PredictionEditUnlock,
+	PredictionLock,
 	ScoringConfig,
 	SideWinner,
 	Tournament,
@@ -32,7 +33,7 @@ import {
 } from '$lib/bracket-rules';
 import { buildBracket, type BracketSlot, type LivePred } from '$lib/bracket-engine';
 import { defaultScoringConfig, parseScoringConfig, serializeScoringConfig } from '$lib/scoring-config';
-import { calculatePredictionPoints, type PredictionPointResult } from '$lib/scoring-engine';
+import { calculatePredictionPoints, calculateGroupStagePoints, type PredictionPointResult } from '$lib/scoring-engine';
 import { canonicalTeamName, getTeamId } from '$lib/teams';
 import { WORLD_CUP_2026_MATCHES } from '$lib/worldcup-2026-fixture';
 import { db } from '$lib/server/db/client';
@@ -40,6 +41,7 @@ import {
 	auditLogs,
 	blogPosts,
 	predictionEditUnlocks,
+	predictionLocks,
 	teamGroupAdjustments,
 	tournaments,
 	tournamentMatches,
@@ -159,6 +161,20 @@ function toPredictionEditUnlock(row: typeof predictionEditUnlocks.$inferSelect):
 	};
 }
 
+function toPredictionLock(row: typeof predictionLocks.$inferSelect): PredictionLock {
+	return {
+		id: String(row.id),
+		userId: String(row.userId),
+		tournamentId: row.tournamentId,
+		enabled: row.enabled,
+		reason: row.reason ?? null,
+		createdBy: row.createdBy === null ? null : String(row.createdBy),
+		createdAt: row.createdAt,
+		updatedBy: row.updatedBy === null ? null : String(row.updatedBy),
+		updatedAt: row.updatedAt
+	};
+}
+
 async function createAuditLog(input: { userId?: number | null; action: string; entityType: string; entityId: string; payload: unknown }) {
 	await db.insert(auditLogs).values({
 		userId: input.userId ?? null,
@@ -206,7 +222,7 @@ function toLivePreds(predictions: Prediction[]): Record<string, LivePred> {
 	);
 }
 
-function buildPredictedBracket(matches: Match[], predictions: Prediction[]): Record<string, BracketSlot> {
+export function buildPredictedBracket(matches: Match[], predictions: Prediction[]): Record<string, BracketSlot> {
 	return buildBracket(matchesForPredictionBracket(matches), toLivePreds(predictions));
 }
 
@@ -355,7 +371,7 @@ export async function registerUser(input: { email: string; password: string; nic
 	return createUserInternal({ ...input, role: 'player' });
 }
 
-export async function updateUserByAdmin(input: { userId: string; nickname: string; role: UserRole; actorUserId: string }): Promise<User> {
+export async function updateUserByAdmin(input: { userId: string; nickname: string; role: UserRole; password?: string; actorUserId: string }): Promise<User> {
 	const id = Number(input.userId);
 	const [existing] = await db.select().from(users).where(eq(users.id, id)).limit(1);
 	if (!existing) throw new Error('Usuario no encontrado.');
@@ -366,13 +382,17 @@ export async function updateUserByAdmin(input: { userId: string; nickname: strin
 	const [dupe] = await db.select().from(users).where(eq(users.nickname, nickname)).limit(1);
 	if (dupe && dupe.id !== id) throw new Error('Ese nickname ya está en uso.');
 
-	const [updated] = await db.update(users).set({ nickname, role: input.role }).where(eq(users.id, id)).returning();
+	const toUpdate = input.password
+		? { nickname, role: input.role, passwordHash: hashPassword(assertPassword(input.password)) }
+		: { nickname, role: input.role };
+
+	const [updated] = await db.update(users).set(toUpdate).where(eq(users.id, id)).returning();
 	await createAuditLog({
 		userId: Number(input.actorUserId),
 		action: 'user_updated_by_admin',
 		entityType: 'user',
 		entityId: String(id),
-		payload: { nickname, role: input.role, previousNickname: existing.nickname, previousRole: existing.role }
+		payload: { nickname, role: input.role, passwordChanged: !!input.password, previousNickname: existing.nickname, previousRole: existing.role }
 	});
 	return toUser(updated);
 }
@@ -866,6 +886,7 @@ export async function assignUserToTournament(input: { userId: string; tournament
 			});
 		}
 	}
+	clearLeaderboardCache();
 }
 
 export async function listUserTournamentIds(userId: string): Promise<string[]> {
@@ -894,6 +915,7 @@ export async function removeUserFromTournament(input: { userId: string; tourname
 		entityId: input.tournamentId,
 		payload: { userId: input.userId }
 	});
+	clearLeaderboardCache();
 }
 
 async function isTournamentLocked(tournament: Tournament): Promise<boolean> {
@@ -960,6 +982,7 @@ export async function canUserEditPredictions(userId: string, tournamentId: strin
 	const sourceId = getSourceId(tournament);
 	const sourceTournament = tournament.parentTournamentId ? await getTournamentById(sourceId) : tournament;
 	if (!sourceTournament) return false;
+	if (await isUserPredictionLocked(userId, sourceId)) return false;
 	if (!(await isTournamentLocked(sourceTournament))) return true;
 	return (await getActivePredictionUnlock(userId, sourceId)) !== null;
 }
@@ -978,6 +1001,9 @@ export async function savePrediction(input: {
 	const sourceId = getSourceId(tournament);
 	const sourceTournament = tournament.parentTournamentId ? await getTournamentById(sourceId) : tournament;
 	if (!sourceTournament) throw new Error('Competicion inexistente.');
+	if (await isUserPredictionLocked(input.userId, sourceId)) {
+		throw new Error('La competicion esta bloqueada para este usuario.');
+	}
 	const usedIndividualUnlock = await isTournamentLocked(sourceTournament);
 	if (usedIndividualUnlock && !(await getActivePredictionUnlock(input.userId, sourceId))) {
 		throw new Error('La competicion esta bloqueada para este usuario.');
@@ -990,7 +1016,11 @@ export async function savePrediction(input: {
 
 	const [match] = await db.select().from(tournamentMatches).where(eq(tournamentMatches.id, input.matchId)).limit(1);
 	if (!match || match.tournamentId !== sourceId) throw new Error('Partido inexistente.');
-	if (match.isClosed || Date.now() >= new Date(match.kickoffAt).getTime()) throw new Error('Este partido ya comenzo y no admite cambios.');
+	const kickoffTime = new Date(match.kickoffAt).getTime();
+	const tenMinutesBefore = kickoffTime - 10 * 60 * 1000;
+	if (match.isClosed || Date.now() >= tenMinutesBefore) {
+		throw new Error('No es posible guardar el pronóstico. El partido está por comenzar (límite de 10 minutos) o ya comenzó.');
+	}
 	if (input.predA < 0 || input.predB < 0) throw new Error('Los goles no pueden ser negativos.');
 
 	const [existing] = await db
@@ -1027,6 +1057,7 @@ export async function savePrediction(input: {
 				usedIndividualUnlock
 			}
 		});
+		clearLeaderboardCache();
 		return toPrediction(updated);
 	}
 
@@ -1057,6 +1088,7 @@ export async function savePrediction(input: {
 			usedIndividualUnlock
 		}
 	});
+	clearLeaderboardCache();
 	return toPrediction(created);
 }
 
@@ -1148,6 +1180,92 @@ export async function listPredictionUnlocksForTournament(tournamentId: string): 
 	const rows = await db.select().from(predictionEditUnlocks).where(eq(predictionEditUnlocks.tournamentId, sourceId));
 	return rows.map(toPredictionEditUnlock);
 }
+
+export async function isUserPredictionLocked(userId: string, tournamentId: string): Promise<boolean> {
+	const sourceId = await getSourceTournamentId(tournamentId);
+	const [row] = await db
+		.select()
+		.from(predictionLocks)
+		.where(
+			and(
+				eq(predictionLocks.userId, Number(userId)),
+				eq(predictionLocks.tournamentId, sourceId),
+				eq(predictionLocks.enabled, true)
+			)
+		)
+		.limit(1);
+	return row !== undefined;
+}
+
+export async function setUserPredictionLock(input: {
+	userId: string;
+	tournamentId: string;
+	reason?: string;
+	actorUserId: string;
+}): Promise<PredictionLock> {
+	const sourceId = await getSourceTournamentId(input.tournamentId);
+	const now = new Date().toISOString();
+	const [row] = await db
+		.insert(predictionLocks)
+		.values({
+			userId: Number(input.userId),
+			tournamentId: sourceId,
+			enabled: true,
+			reason: input.reason?.trim() || null,
+			createdBy: Number(input.actorUserId),
+			createdAt: now,
+			updatedBy: Number(input.actorUserId),
+			updatedAt: now
+		})
+		.onConflictDoUpdate({
+			target: [predictionLocks.userId, predictionLocks.tournamentId],
+			set: {
+				enabled: true,
+				reason: input.reason?.trim() || null,
+				updatedBy: Number(input.actorUserId),
+				updatedAt: now
+			}
+		})
+		.returning();
+
+	await createAuditLog({
+		userId: Number(input.actorUserId),
+		action: 'prediction_lock_enabled',
+		entityType: 'prediction_lock',
+		entityId: `${sourceId}::${input.userId}`,
+		payload: { userId: input.userId, tournamentId: sourceId, reason: input.reason?.trim() || null }
+	});
+
+	return toPredictionLock(row);
+}
+
+export async function disableUserPredictionLock(input: {
+	userId: string;
+	tournamentId: string;
+	actorUserId: string;
+}): Promise<void> {
+	const sourceId = await getSourceTournamentId(input.tournamentId);
+	const now = new Date().toISOString();
+	await db
+		.update(predictionLocks)
+		.set({ enabled: false, updatedBy: Number(input.actorUserId), updatedAt: now })
+		.where(and(eq(predictionLocks.userId, Number(input.userId)), eq(predictionLocks.tournamentId, sourceId)));
+
+	await createAuditLog({
+		userId: Number(input.actorUserId),
+		action: 'prediction_lock_disabled',
+		entityType: 'prediction_lock',
+		entityId: `${sourceId}::${input.userId}`,
+		payload: { userId: input.userId, tournamentId: sourceId }
+	});
+}
+
+export async function listPredictionLocksForTournament(tournamentId: string): Promise<PredictionLock[]> {
+	const sourceId = await getSourceTournamentId(tournamentId);
+	const rows = await db.select().from(predictionLocks).where(eq(predictionLocks.tournamentId, sourceId));
+	return rows.map(toPredictionLock);
+}
+
 
 function parsePredictionAuditPayload(payloadJson: string): {
 	userId: string;
@@ -1248,6 +1366,71 @@ export async function listUserPredictionChangeSummaries(tournamentId: string): P
 	return [...summaries.values()];
 }
 
+export async function getPredictionChangeAuditsAndSummaries(tournamentId: string): Promise<{
+	changeSummaries: UserPredictionChangeSummary[];
+	predictionChangeAudit: Record<string, PredictionChangeAudit[]>;
+}> {
+	const sourceId = await getSourceTournamentId(tournamentId);
+	const [rows, matches] = await Promise.all([
+		db
+			.select()
+			.from(auditLogs)
+			.where(inArray(auditLogs.action, ['prediction_created', 'prediction_updated']))
+			.orderBy(desc(auditLogs.createdAt), desc(auditLogs.id)),
+		listMatches(sourceId)
+	]);
+
+	const matchLabels = new Map(matches.map((match) => [match.id, `${match.teamA} vs ${match.teamB}`]));
+
+	const changeSummaries = new Map<string, UserPredictionChangeSummary>();
+	const predictionChangeAudit: Record<string, PredictionChangeAudit[]> = {};
+
+	for (const row of rows) {
+		const payload = parsePredictionAuditPayload(row.payloadJson);
+		if (!payload || payload.tournamentId !== sourceId) continue;
+
+		const userId = payload.userId;
+		const change: PredictionChangeAudit = {
+			id: String(row.id),
+			userId,
+			tournamentId: payload.tournamentId,
+			matchId: payload.matchId,
+			matchLabel: matchLabels.get(payload.matchId) ?? payload.matchId,
+			action: row.action as PredictionChangeAudit['action'],
+			previous: payload.previous,
+			next: payload.next,
+			changedByUserId: row.userId === null ? null : String(row.userId),
+			usedIndividualUnlock: payload.usedIndividualUnlock,
+			createdAt: row.createdAt
+		};
+
+		// Group audits by userId
+		if (!predictionChangeAudit[userId]) {
+			predictionChangeAudit[userId] = [];
+		}
+		predictionChangeAudit[userId].push(change);
+
+		// Build change summary
+		const current = changeSummaries.get(userId);
+		if (!current) {
+			changeSummaries.set(userId, {
+				userId,
+				count: 1,
+				lastChangedAt: row.createdAt,
+				lastChange: change
+			});
+		} else {
+			current.count += 1;
+		}
+	}
+
+	return {
+		changeSummaries: [...changeSummaries.values()],
+		predictionChangeAudit
+	};
+}
+
+
 export async function setMatchResult(input: {
 	tournamentId: string;
 	matchId: string;
@@ -1297,6 +1480,8 @@ export async function setMatchResult(input: {
 		});
 	}
 
+	clearLeaderboardCache();
+	clearLandingCache();
 	return match;
 }
 
@@ -1331,6 +1516,8 @@ export async function clearMatchResult(input: {
 
 	await syncTournamentBracketForSource(sourceId);
 
+	clearLeaderboardCache();
+	clearLandingCache();
 	return toMatch(updated);
 }
 
@@ -1406,7 +1593,29 @@ export async function lockTournament(tournamentId: string, reason: string, actor
 	return { state: 'locked', tournamentStartAt: updated.startAt, lockReason: updated.lockReason };
 }
 
+const leaderboardCache = new Map<string, { promise: Promise<LeaderboardEntry[]>; timestamp: number }>();
+const LEADERBOARD_CACHE_TTL = 60 * 1000; // 60 seconds
+
+export function clearLeaderboardCache() {
+	leaderboardCache.clear();
+}
+
 export async function getLeaderboard(tournamentId: string): Promise<LeaderboardEntry[]> {
+	const now = Date.now();
+	const cached = leaderboardCache.get(tournamentId);
+	if (cached && (now - cached.timestamp < LEADERBOARD_CACHE_TTL)) {
+		return cached.promise;
+	}
+
+	const promise = getLeaderboardUncached(tournamentId).catch((err) => {
+		leaderboardCache.delete(tournamentId);
+		throw err;
+	});
+	leaderboardCache.set(tournamentId, { promise, timestamp: now });
+	return promise;
+}
+
+async function getLeaderboardUncached(tournamentId: string): Promise<LeaderboardEntry[]> {
 	const tournament = await getTournamentById(tournamentId);
 	if (!tournament) throw new Error('Liga inexistente.');
 	const sourceId = getSourceId(tournament);
@@ -1451,6 +1660,9 @@ export async function getLeaderboard(tournamentId: string): Promise<LeaderboardE
 			if (points.exactHit) exactHits += 1;
 			else if (points.outcomeHit) outcomeHits += 1;
 		}
+		const groupStage = calculateGroupStagePoints(userPredictions, matches, config);
+		totalPoints += groupStage.totalPoints;
+		bracketPoints += groupStage.totalPoints;
 		return { userId: user.id, nickname: user.nickname, role: user.role, avatarUrl: user.avatarUrl, totalPoints, exactHits, outcomeHits, bracketPoints };
 	});
 
@@ -1546,6 +1758,8 @@ export async function updateMatchTeams(input: {
 		}
 	});
 
+	clearLeaderboardCache();
+	clearLandingCache();
 	return toMatch(updated);
 }
 
@@ -1711,9 +1925,41 @@ export async function setGroupAdjustment(input: {
 			payload: { source: 'tiebreaker', groupCode: input.groupCode, team: input.team }
 		});
 	}
+	clearLeaderboardCache();
+	clearLandingCache();
 }
 
-export async function buildLandingData() {
+type LandingDataResult = {
+	tournament: Tournament | null;
+	matches: Match[];
+	groups: Record<string, GroupStandingRow[]>;
+	groupMatches: Match[];
+	bracketMatches: Match[];
+};
+
+const landingCache = new Map<string, { promise: Promise<LandingDataResult>; timestamp: number }>();
+const LANDING_CACHE_TTL = 60 * 1000;
+
+export function clearLandingCache() {
+	landingCache.clear();
+}
+
+export async function buildLandingData(): Promise<LandingDataResult> {
+	const now = Date.now();
+	const cached = landingCache.get('default');
+	if (cached && now - cached.timestamp < LANDING_CACHE_TTL) {
+		return cached.promise;
+	}
+
+	const promise = buildLandingDataUncached().catch((err) => {
+		landingCache.delete('default');
+		throw err;
+	});
+	landingCache.set('default', { promise, timestamp: now });
+	return promise;
+}
+
+async function buildLandingDataUncached(): Promise<LandingDataResult> {
 	const tournament = await getActiveTournament();
 	if (!tournament) {
 		return {
@@ -1746,13 +1992,38 @@ export async function buildLandingData() {
 /* Blog                                            */
 /* ─────────────────────────────────────────────── */
 
+interface BlogCache {
+	allPosts: Promise<BlogPost[]> | null;
+	publishedPosts: Map<string, Promise<BlogPost[]>>;
+	publishedCount: Promise<number> | null;
+	postsBySlug: Map<string, Promise<BlogPost | null>>;
+}
+
+let blogCache: BlogCache = {
+	allPosts: null,
+	publishedPosts: new Map(),
+	publishedCount: null,
+	postsBySlug: new Map()
+};
+
+export function clearBlogCache() {
+	blogCache = {
+		allPosts: null,
+		publishedPosts: new Map(),
+		publishedCount: null,
+		postsBySlug: new Map()
+	};
+}
+
 function sanitizeBlogBody(body: string): string {
 	return sanitizeHtml(body.trim(), {
-		allowedTags: ['p', 'br', 'strong', 'em', 'u', 's', 'h2', 'h3', 'ul', 'ol', 'li', 'blockquote', 'a'],
+		allowedTags: ['p', 'br', 'strong', 'em', 'u', 's', 'h2', 'h3', 'ul', 'ol', 'li', 'blockquote', 'a', 'iframe'],
 		allowedAttributes: {
-			a: ['href', 'target', 'rel']
+			a: ['href', 'target', 'rel'],
+			iframe: ['src', 'width', 'height', 'frameborder', 'allow', 'allowfullscreen', 'class']
 		},
 		allowedSchemes: ['http', 'https', 'mailto'],
+		allowedIframeHostnames: ['www.youtube.com', 'www.youtube-nocookie.com', 'youtube.com'],
 		allowProtocolRelative: false,
 		transformTags: {
 			div: 'p',
@@ -1823,12 +2094,23 @@ function toBlogPost(row: typeof blogPosts.$inferSelect, authorNickname: string):
 }
 
 export async function countPublishedBlogPosts(): Promise<number> {
-	const [row] = await db.select({ total: count() }).from(blogPosts).where(eq(blogPosts.published, true));
-	return row?.total ?? 0;
+	if (blogCache.publishedCount !== null) {
+		return blogCache.publishedCount;
+	}
+	const promise = db.select({ total: count() }).from(blogPosts).where(eq(blogPosts.published, true))
+		.then(([row]) => row?.total ?? 0)
+		.catch(err => { blogCache.publishedCount = null; throw err; });
+	blogCache.publishedCount = promise;
+	return promise;
 }
 
 export async function listPublishedBlogPosts(limit = 10, offset = 0): Promise<BlogPost[]> {
-	const rows = await db
+	const cacheKey = `${limit}:${offset}`;
+	const cached = blogCache.publishedPosts.get(cacheKey);
+	if (cached !== undefined) {
+		return cached;
+	}
+	const promise = db
 		.select({
 			post: publicBlogPostFields(),
 			nickname: users.nickname
@@ -1838,24 +2120,37 @@ export async function listPublishedBlogPosts(limit = 10, offset = 0): Promise<Bl
 		.where(eq(blogPosts.published, true))
 		.orderBy(desc(blogPosts.createdAt), desc(blogPosts.id))
 		.limit(limit)
-		.offset(offset);
-	return rows.map((r) => toBlogPost(r.post, r.nickname));
+		.offset(offset)
+		.then(rows => rows.map((r) => toBlogPost(r.post, r.nickname)))
+		.catch(err => { blogCache.publishedPosts.delete(cacheKey); throw err; });
+	blogCache.publishedPosts.set(cacheKey, promise);
+	return promise;
 }
 
 export async function listAllBlogPosts(): Promise<BlogPost[]> {
-	const rows = await db
+	if (blogCache.allPosts !== null) {
+		return blogCache.allPosts;
+	}
+	const promise = db
 		.select({
 			post: publicBlogPostFields(),
 			nickname: users.nickname
 		})
 		.from(blogPosts)
 		.innerJoin(users, eq(blogPosts.authorId, users.id))
-		.orderBy(asc(blogPosts.createdAt));
-	return rows.reverse().map((r) => toBlogPost(r.post, r.nickname));
+		.orderBy(asc(blogPosts.createdAt))
+		.then(rows => rows.reverse().map((r) => toBlogPost(r.post, r.nickname)))
+		.catch(err => { blogCache.allPosts = null; throw err; });
+	blogCache.allPosts = promise;
+	return promise;
 }
 
 export async function getBlogPostBySlug(slug: string): Promise<BlogPost | null> {
-	const rows = await db
+	const cached = blogCache.postsBySlug.get(slug);
+	if (cached !== undefined) {
+		return cached;
+	}
+	const promise = db
 		.select({
 			post: publicBlogPostFields(),
 			nickname: users.nickname
@@ -1863,9 +2158,14 @@ export async function getBlogPostBySlug(slug: string): Promise<BlogPost | null> 
 		.from(blogPosts)
 		.innerJoin(users, eq(blogPosts.authorId, users.id))
 		.where(eq(blogPosts.slug, slug))
-		.limit(1);
-	if (!rows.length) return null;
-	return toBlogPost(rows[0].post, rows[0].nickname);
+		.limit(1)
+		.then(rows => {
+			if (!rows.length) return null;
+			return toBlogPost(rows[0].post, rows[0].nickname);
+		})
+		.catch(err => { blogCache.postsBySlug.delete(slug); throw err; });
+	blogCache.postsBySlug.set(slug, promise);
+	return promise;
 }
 
 export async function getBlogPostImageById(postId: string): Promise<{ bytes: Buffer; contentType: string; updatedAt: string } | null> {
@@ -1922,6 +2222,7 @@ export async function createBlogPost(input: {
 		.returning();
 
 	const author = await getUserById(String(input.authorId));
+	clearBlogCache();
 	return toBlogPost(created, author?.nickname ?? 'Admin');
 }
 
@@ -1957,9 +2258,11 @@ export async function updateBlogPost(input: {
 	const [updated] = await db.update(blogPosts).set(values).where(eq(blogPosts.id, postId)).returning();
 	if (!updated) throw new Error('Artículo no encontrado.');
 	const author = await getUserById(String(updated.authorId));
+	clearBlogCache();
 	return toBlogPost(updated, author?.nickname ?? 'Admin');
 }
 
 export async function deleteBlogPost(postId: string): Promise<void> {
 	await db.delete(blogPosts).where(eq(blogPosts.id, Number(postId)));
+	clearBlogCache();
 }

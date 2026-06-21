@@ -60,7 +60,7 @@ try {
 		teamB: 'Corea del Sur'
 	});
 	assert.equal(reversedTeamsExact?.outcomePoints, 1, 'Debe sumar resultado por identidad de equipo, no por posicion A/B');
-	assert.equal(reversedTeamsExact?.exactPoints, 2, 'Debe sumar exacto aunque los equipos esten invertidos si el marcador por equipo coincide');
+	assert.equal(reversedTeamsExact?.exactPoints, 1, 'Debe sumar exacto (bonus 1) aunque los equipos esten invertidos si el marcador por equipo coincide');
 	assert.equal(reversedTeamsExact?.bracketPoints, 2, 'Debe sumar equipo que avanza por ID');
 
 	console.log('OK: scoring de llaves exige identidad de equipos para resultado/exacto y no premia local/visitante sin equipo.');

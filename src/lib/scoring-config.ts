@@ -3,13 +3,13 @@ import type { ScoringConfig, StageScoringConfig, MatchStage } from '$lib/types';
 export const SCORING_STAGES = ['groups', 'round32', 'round16', 'quarterfinal', 'semifinal', 'thirdplace', 'final'] as const satisfies readonly MatchStage[];
 
 const DEFAULT_STAGE_SCORING: Record<MatchStage, StageScoringConfig> = {
-	groups: { outcome: 1, exact: 2, bracketTeam: 0 },
-	round32: { outcome: 1, exact: 2, bracketTeam: 2 },
-	round16: { outcome: 1, exact: 2, bracketTeam: 3 },
-	quarterfinal: { outcome: 1, exact: 2, bracketTeam: 4 },
-	semifinal: { outcome: 1, exact: 2, bracketTeam: 5 },
-	thirdplace: { outcome: 1, exact: 2, bracketTeam: 6 },
-	final: { outcome: 1, exact: 2, bracketTeam: 6 }
+	groups: { outcome: 1, exact: 1, bracketTeam: 2 },
+	round32: { outcome: 1, exact: 1, bracketTeam: 2 },
+	round16: { outcome: 1, exact: 1, bracketTeam: 3 },
+	quarterfinal: { outcome: 1, exact: 1, bracketTeam: 4 },
+	semifinal: { outcome: 1, exact: 1, bracketTeam: 5 },
+	thirdplace: { outcome: 1, exact: 1, bracketTeam: 6 },
+	final: { outcome: 1, exact: 1, bracketTeam: 6 }
 };
 
 function pointsOrDefault(value: unknown, fallback: number): number {
@@ -27,7 +27,7 @@ export function normalizeScoringConfig(config: unknown): ScoringConfig {
 				{
 					outcome: pointsOrDefault(stageInput.outcome, defaults.outcome),
 					exact: pointsOrDefault(stageInput.exact, defaults.exact),
-					bracketTeam: stage === 'groups' ? 0 : pointsOrDefault(stageInput.bracketTeam, defaults.bracketTeam)
+					bracketTeam: pointsOrDefault(stageInput.bracketTeam, defaults.bracketTeam)
 				}
 			];
 		})

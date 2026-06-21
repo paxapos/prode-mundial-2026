@@ -1,7 +1,16 @@
 import { getMatchOutcome, resolveWinner } from '$lib/bracket-rules';
+import { calcStandings, type LivePred } from '$lib/bracket-engine';
 import { getStageConfig } from '$lib/scoring-config';
 import { getTeamId } from '$lib/teams';
-import type { Match, MatchPointDetail, Prediction, ScoringConfig, SideWinner } from '$lib/types';
+import type {
+	GroupPositionPointDetail,
+	GroupStagePointResult,
+	Match,
+	MatchPointDetail,
+	Prediction,
+	ScoringConfig,
+	SideWinner
+} from '$lib/types';
 
 export type PredictionPointResult = MatchPointDetail & {
 	exactHit: boolean;
@@ -102,4 +111,65 @@ export function calculatePredictionPoints(
 		exactHit,
 		outcomeHit
 	};
+}
+
+const SCORED_GROUP_POSITIONS = [0, 1, 2] as const; // 1°, 2°, 3°
+
+/**
+ * Puntaje por acertar la posición en la tabla final de cada grupo.
+ * Compara los standings pronosticados (derivados de los pronósticos del usuario)
+ * contra los reales (derivados de los resultados cargados). Solo puntúa grupos
+ * completos (todos sus partidos con resultado) y las posiciones 1°, 2° y 3°.
+ */
+export function calculateGroupStagePoints(
+	prediction: Prediction[],
+	matches: Match[],
+	config: ScoringConfig
+): GroupStagePointResult {
+	const pointsPerSlot = config.stages.groups.bracketTeam;
+	const groupMatches = matches.filter((m) => m.stage === 'groups');
+	if (pointsPerSlot <= 0 || groupMatches.length === 0) return { totalPoints: 0, details: [] };
+
+	const userPreds: Record<string, LivePred> = {};
+	for (const p of prediction) {
+		userPreds[p.matchId] = { predA: p.predA, predB: p.predB, predPenaltyWinner: p.predPenaltyWinner };
+	}
+	const actualPreds: Record<string, LivePred> = {};
+	for (const m of groupMatches) {
+		if (m.scoreA !== null && m.scoreB !== null) {
+			actualPreds[m.id] = { predA: m.scoreA, predB: m.scoreB, predPenaltyWinner: m.penaltyWinner };
+		}
+	}
+
+	const predictedStandings = calcStandings(groupMatches, userPreds);
+	const actualStandings = calcStandings(groupMatches, actualPreds);
+
+	const matchesByGroup = new Map<string, Match[]>();
+	for (const m of groupMatches) {
+		const g = m.groupCode ?? '?';
+		const list = matchesByGroup.get(g) ?? [];
+		list.push(m);
+		matchesByGroup.set(g, list);
+	}
+
+	const details: GroupPositionPointDetail[] = [];
+	let totalPoints = 0;
+
+	for (const [g, gMatches] of matchesByGroup) {
+		const complete = gMatches.length > 0 && gMatches.every((m) => actualPreds[m.id] !== undefined);
+		if (!complete) continue;
+		const predicted = predictedStandings[g] ?? [];
+		const actual = actualStandings[g] ?? [];
+		for (const idx of SCORED_GROUP_POSITIONS) {
+			const predTeam = predicted[idx]?.team;
+			const actTeam = actual[idx]?.team;
+			if (!predTeam || !actTeam) continue;
+			const hit = getTeamId(predTeam) === getTeamId(actTeam);
+			const points = hit ? pointsPerSlot : 0;
+			totalPoints += points;
+			details.push({ groupCode: g, position: idx + 1, predictedTeam: predTeam, actualTeam: actTeam, hit, points });
+		}
+	}
+
+	return { totalPoints, details };
 }

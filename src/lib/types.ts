@@ -81,6 +81,19 @@ export interface PredictionEditUnlock {
 	updatedAt: string;
 }
 
+export interface PredictionLock {
+	id: string;
+	userId: string;
+	tournamentId: string;
+	enabled: boolean;
+	reason: string | null;
+	createdBy: string | null;
+	createdAt: string;
+	updatedBy: string | null;
+	updatedAt: string;
+}
+
+
 export interface PredictionChangeAudit {
 	id: string;
 	userId: string;
@@ -162,4 +175,21 @@ export interface BlogPost {
 	published: boolean;
 	createdAt: string;
 	updatedAt: string;
+}
+
+/** Una posición de grupo evaluada para puntaje de clasificación */
+export interface GroupPositionPointDetail {
+	groupCode: string;
+	/** 1, 2 o 3 */
+	position: number;
+	predictedTeam: string;
+	actualTeam: string;
+	hit: boolean;
+	points: number;
+}
+
+/** Resultado del puntaje por clasificación en fase de grupos de un usuario */
+export interface GroupStagePointResult {
+	totalPoints: number;
+	details: GroupPositionPointDetail[];
 }

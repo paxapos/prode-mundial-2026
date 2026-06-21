@@ -18,14 +18,15 @@
 
 		<div class="overflow-x-auto">
 			<table class="w-full text-sm">
-				<thead><tr class="border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-400"><th class="py-2 text-left">Fase</th><th class="py-2 text-center">Resultado</th><th class="py-2 text-center">R. Exacto</th><th class="py-2 text-center">Equipo que avanza</th></tr></thead>
+				<thead><tr class="border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-400"><th class="py-2 text-left">Fase</th><th class="py-2 text-center">Resultado</th><th class="py-2 text-center">R. Exacto</th><th class="py-2 text-center">Avance / Posición</th></tr></thead>
 				<tbody class="divide-y divide-slate-100">
 					{#each STAGES as stage}
-						<tr class="hover:bg-slate-50/50"><td class="py-2 text-xs font-bold text-slate-700">{STAGE_LABELS[stage]}</td><td class="py-2 text-center"><input type="number" min="0" bind:value={scoringConfig.stages[stage].outcome} class="w-14 rounded border border-slate-200 bg-slate-50 px-1 py-1 text-center text-sm font-bold focus:border-sky-400" /></td><td class="py-2 text-center"><input type="number" min="0" bind:value={scoringConfig.stages[stage].exact} class="w-14 rounded border border-slate-200 bg-slate-50 px-1 py-1 text-center text-sm font-bold focus:border-sky-400" /></td><td class="py-2 text-center"><input type="number" min="0" bind:value={scoringConfig.stages[stage].bracketTeam} class="w-14 rounded border border-slate-200 bg-slate-50 px-1 py-1 text-center text-sm font-bold focus:border-sky-400" disabled={stage === 'groups'} /></td></tr>
+						<tr class="hover:bg-slate-50/50"><td class="py-2 text-xs font-bold text-slate-700">{STAGE_LABELS[stage]}</td><td class="py-2 text-center"><input type="number" min="0" bind:value={scoringConfig.stages[stage].outcome} class="w-14 rounded border border-slate-200 bg-slate-50 px-1 py-1 text-center text-sm font-bold focus:border-sky-400" /></td><td class="py-2 text-center"><input type="number" min="0" bind:value={scoringConfig.stages[stage].exact} class="w-14 rounded border border-slate-200 bg-slate-50 px-1 py-1 text-center text-sm font-bold focus:border-sky-400" /></td><td class="py-2 text-center"><input type="number" min="0" bind:value={scoringConfig.stages[stage].bracketTeam} class="w-14 rounded border border-slate-200 bg-slate-50 px-1 py-1 text-center text-sm font-bold focus:border-sky-400" /></td></tr>
 					{/each}
 				</tbody>
 			</table>
 		</div>
+		<p class="mt-2 text-[11px] text-slate-400">En <strong>Fase de Grupos</strong>, "Avance / Posición" son los puntos que suma cada posición acertada en la tabla (1°, 2° y 3°).</p>
 
 		<form method="POST" action="?/updateRules" use:enhance class="mt-4">
 			<input type="hidden" name="tournamentId" value={data.selectedTournament?.id} />

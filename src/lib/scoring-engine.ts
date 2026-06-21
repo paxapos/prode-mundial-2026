@@ -113,7 +113,8 @@ export function calculatePredictionPoints(
 	};
 }
 
-const SCORED_GROUP_POSITIONS = [0, 1, 2] as const; // 1°, 2°, 3°
+// 1° y 2° (clasificación directa). El 3° (mejores terceros) queda pendiente de definir.
+const SCORED_GROUP_POSITIONS = [0, 1] as const;
 
 /**
  * Puntaje por acertar la posición en la tabla final de cada grupo.

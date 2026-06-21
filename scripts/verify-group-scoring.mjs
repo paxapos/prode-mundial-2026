@@ -44,6 +44,8 @@ try {
 	assert.equal(res.totalPoints, 4, `esperaba 4, dio ${res.totalPoints}`);
 	const hits = res.details.filter((d) => d.hit).map((d) => d.position).sort();
 	assert.deepEqual(hits, [1, 2], 'deben acertar posiciones 1 y 2');
+	// El 3° queda diferido: no debe evaluarse ninguna posición 3
+	assert.ok(!res.details.some((d) => d.position === 3), 'el 3° no debe puntuar (diferido)');
 
 	// Grupo incompleto no puntúa
 	const incompleteMatches = matches.map((m, i) => (i === 0 ? { ...m, scoreA: null, scoreB: null } : m));

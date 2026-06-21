@@ -32,3 +32,4 @@ vite.config.ts.timestamp-*
 .firebaserc
 firebase-debug.log
 firebase-debug.*.log
+snapshot.db

@@ -4,6 +4,15 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="text-scale" content="scale" />
+		<link rel="manifest" href="/manifest.json" />
+		<meta name="theme-color" content="#0f172a" />
+		<link rel="apple-touch-icon" href="/icon-192.png" />
+		<script>
+			try {
+				var size = localStorage.getItem('app-font-scale') || '100';
+				document.documentElement.style.fontSize = size + '%';
+			} catch (e) {}
+		</script>
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">

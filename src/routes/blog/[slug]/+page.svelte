@@ -2,7 +2,7 @@
 	let { data } = $props();
 
 	const IMAGE_URL_RE = /^https?:\/\/\S+\.(jpg|jpeg|png|gif|webp|svg)(\?\S*)?$/i;
-	const RICH_BODY_RE = /<\/?(p|h2|h3|ul|ol|li|blockquote|strong|em|u|s|a|br)\b/i;
+	const RICH_BODY_RE = /<\/?(p|h2|h3|ul|ol|li|blockquote|strong|em|u|s|a|br|iframe)\b/i;
 
 	let showModal = $state(false);
 	let scale = $state(1);
@@ -155,7 +155,7 @@
 		</p>
 	</div>
 
-	<div class="space-y-4 text-base leading-relaxed text-slate-700 [&_a]:font-semibold [&_a]:text-sky-600 [&_a]:underline [&_blockquote]:border-l-4 [&_blockquote]:border-slate-300 [&_blockquote]:pl-4 [&_h2]:text-2xl [&_h2]:font-black [&_h2]:tracking-tight [&_h2]:text-slate-900 [&_h3]:text-lg [&_h3]:font-bold [&_h3]:text-slate-900 [&_li]:ml-5 [&_ol]:list-decimal [&_ul]:list-disc">
+	<div class="space-y-4 text-base leading-relaxed text-slate-700 [&_a]:font-semibold [&_a]:text-sky-600 [&_a]:underline [&_blockquote]:border-l-4 [&_blockquote]:border-slate-300 [&_blockquote]:pl-4 [&_h2]:text-2xl [&_h2]:font-black [&_h2]:tracking-tight [&_h2]:text-slate-900 [&_h3]:text-lg [&_h3]:font-bold [&_h3]:text-slate-900 [&_li]:ml-5 [&_ol]:list-decimal [&_ul]:list-disc [&_iframe]:w-full [&_iframe]:aspect-video [&_iframe]:rounded-xl [&_iframe]:shadow-md [&_iframe]:my-4">
 		{@html renderBody(data.post.body)}
 	</div>
 </section>

@@ -47,15 +47,23 @@
 			<h1 class="text-4xl font-black tracking-tight text-slate-900">{data.tournament.name}</h1>
 			<p class="mt-1 text-base text-slate-500">Tabla de posiciones de la liga.</p>
 		</div>
-		<button
-			onclick={copyInviteLink}
-			class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
-		>
-			📤 Invitar amigos
-		</button>
-		{#if inviteMsg}
-			<span class="text-xs font-bold text-emerald-600">{inviteMsg}</span>
-		{/if}
+		<div class="flex flex-wrap items-center gap-3">
+			<a
+				href="/{data.tournament.alias}/estadisticas"
+				class="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-700 shadow-sm transition-colors hover:bg-blue-100"
+			>
+				📊 Estadísticas de la liga
+			</a>
+			<button
+				onclick={copyInviteLink}
+				class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
+			>
+				📤 Invitar amigos
+			</button>
+			{#if inviteMsg}
+				<span class="text-xs font-bold text-emerald-600">{inviteMsg}</span>
+			{/if}
+		</div>
 	</div>
 
 	<div class="w-full overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -77,7 +85,8 @@
 					</tr>
 				{:else}
 					{#each data.leaderboard as row, index}
-						<tr class="transition-colors hover:bg-slate-50/70">
+						{@const isRelegation = data.leaderboard.length > 5 && index >= data.leaderboard.length - 5}
+						<tr class="transition-colors {isRelegation ? 'bg-red-50/80 hover:bg-red-100/80' : 'hover:bg-slate-50/70'}">
 							<td class="px-6 py-4">
 								{#if index === 0}
 									<span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-amber-300 to-amber-500 text-sm font-black text-white shadow-sm">1</span>
@@ -86,13 +95,16 @@
 								{:else if index === 2}
 									<span class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-amber-600 to-amber-800 text-sm font-black text-white shadow-sm">3</span>
 								{:else}
-									<span class="inline-flex h-8 w-8 items-center justify-center text-sm font-semibold text-slate-400">{index + 1}</span>
+									<span class="inline-flex h-8 w-8 items-center justify-center text-sm font-semibold {isRelegation ? 'text-red-600' : 'text-slate-400'}">{index + 1}</span>
 								{/if}
 							</td>
 							<td class="px-6 py-4 text-base font-semibold">
-								<a href="/{data.tournament.alias}/prode/{row.nickname}" class="flex items-center gap-2.5 text-blue-600 hover:text-blue-800 hover:underline">
+								<a href="/{data.tournament.alias}/prode/{row.nickname}" class="flex items-center gap-2.5 {isRelegation ? 'text-red-700 hover:text-red-900' : 'text-blue-600 hover:text-blue-800'} hover:underline">
 									<UserAvatar nickname={row.nickname} avatarUrl={row.avatarUrl} size="sm" />
 									{row.nickname}
+									{#if isRelegation}
+										<span title="Zona de descenso" class="text-xl">💩</span>
+									{/if}
 								</a>
 							</td>
 							<td class="px-6 py-4 text-center">
@@ -140,26 +152,4 @@
 		</div>
 	{/if}
 
-	<!-- La Pizarra del DT (blog) -->
-	{#if data.blogPosts?.length}
-		<div class="space-y-4">
-			<div class="flex items-center gap-3">
-				<img src="/guru-futbol.svg" alt="Gurú Táctico" class="h-8 w-8" />
-				<h2 class="text-lg font-black tracking-tight text-slate-900">La Pizarra del DT</h2>
-			</div>
-			<div class="grid gap-4 md:grid-cols-3">
-				{#each data.blogPosts as post}
-					<a href="/blog/{post.slug}" class="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md">
-						{#if post.imageUrl}
-							<img src={post.imageUrl} alt={post.title} loading="lazy" decoding="async" class="h-32 w-full object-cover" />
-						{/if}
-						<div class="p-3">
-							<h3 class="text-sm font-bold text-slate-800 group-hover:text-sky-600">{post.title}</h3>
-							<p class="mt-1 line-clamp-2 text-xs text-slate-500">{post.excerpt}</p>
-						</div>
-					</a>
-				{/each}
-			</div>
-		</div>
-	{/if}
 </section>

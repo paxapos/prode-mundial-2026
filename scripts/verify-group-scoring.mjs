@@ -4,8 +4,11 @@ import { createServer } from 'vite';
 const server = await createServer({ appType: 'custom', logLevel: 'error', server: { middlewareMode: true } });
 try {
 	const { calculateGroupStagePoints } = await server.ssrLoadModule('/src/lib/scoring-engine.ts');
+	const { buildBracket } = await server.ssrLoadModule('/src/lib/bracket-engine.ts');
 	const { normalizeScoringConfig } = await server.ssrLoadModule('/src/lib/scoring-config.ts');
 	const config = normalizeScoringConfig({ stages: { groups: { outcome: 1, exact: 1, bracketTeam: 2 } } });
+	const toLive = (preds) =>
+		Object.fromEntries(preds.map((p) => [p.matchId, { predA: p.predA, predB: p.predB, predPenaltyWinner: p.predPenaltyWinner }]));
 
 	// Dos grupos completos. Orden real: A) Argentina>Brasil>Chile>Peru  B) Francia>Alemania>Italia>Espana
 	const groupTeams = { A: ['Argentina', 'Brasil', 'Chile', 'Peru'], B: ['Francia', 'Alemania', 'Italia', 'Espana'] };
@@ -38,7 +41,7 @@ try {
 
 	// Participante 1: pronostica el MISMO orden -> su bracket pone Brasil (2°A) y Alemania (2°B) en r32-01.
 	const predsSame = groupMatches.map((m) => mkPred(m, 1, 0));
-	const res1 = calculateGroupStagePoints(predsSame, matches, config);
+	const res1 = calculateGroupStagePoints(buildBracket(matches, toLive(predsSame)), matches, config);
 	assert.equal(res1.totalPoints, 4, `acertar los 2 casilleros del partido = 4, dio ${res1.totalPoints}`);
 	assert.equal(res1.details.filter((d) => d.hit).length, 2, 'deben acertar los 2 lados de r32-01');
 
@@ -48,12 +51,12 @@ try {
 		if (m.groupCode === 'B' && m.teamA === 'Alemania' && m.teamB === 'Italia') return mkPred(m, 0, 1);
 		return mkPred(m, 1, 0);
 	});
-	const res2 = calculateGroupStagePoints(predsFlipB, matches, config);
+	const res2 = calculateGroupStagePoints(buildBracket(matches, toLive(predsFlipB)), matches, config);
 	assert.equal(res2.totalPoints, 2, `acertar 1 de 2 casilleros = 2, dio ${res2.totalPoints}`);
 
 	// Casillero sin resolver (equipos reales aún placeholders) no puntúa.
 	const matchesUnresolved = [...groupMatches, { ...r3201, teamA: '2° Grupo A', teamB: '2° Grupo B' }];
-	const res3 = calculateGroupStagePoints(predsSame, matchesUnresolved, config);
+	const res3 = calculateGroupStagePoints(buildBracket(matchesUnresolved, toLive(predsSame)), matchesUnresolved, config);
 	assert.equal(res3.totalPoints, 0, 'casillero con equipos reales sin resolver no debe puntuar');
 
 	console.log('OK verify-group-scoring');

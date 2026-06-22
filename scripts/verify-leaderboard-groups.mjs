@@ -6,7 +6,7 @@ try {
 	const { normalizeScoringConfig } = await server.ssrLoadModule('/src/lib/scoring-config.ts');
 	const config = normalizeScoringConfig({ stages: { groups: { outcome: 1, exact: 1, bracketTeam: 2 } } });
 	// sanity: sin partidos no suma
-	const res = calculateGroupStagePoints([], [], config);
+	const res = calculateGroupStagePoints({}, [], config);
 	assert.equal(res.totalPoints, 0);
 	console.log('OK verify-leaderboard-groups');
 } finally {

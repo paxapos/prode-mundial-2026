@@ -12,6 +12,8 @@ import {
 	deleteBlogPost,
 	disableUserPredictionUnlock,
 	setUserPredictionUnlock,
+	disableUserPredictionLock,
+	setUserPredictionLock,
 	lockTournament,
 	removeUserFromTournament,
 	setGroupAdjustment,
@@ -201,6 +203,33 @@ export async function disableUserPredictionUnlockAction({ request, locals }: Req
 	}
 }
 
+export async function enableUserPredictionLockAction({ request, locals }: RequestEvent) {
+	const user = requireAdmin(locals);
+	const data = await request.formData();
+	const userId = String(data.get('userId') ?? '');
+	const tournamentId = String(data.get('tournamentId') ?? '');
+	const reason = String(data.get('reason') ?? '');
+	try {
+		await setUserPredictionLock({ userId, tournamentId, reason, actorUserId: user.id });
+		return { ok: true };
+	} catch (err) {
+		return fail(400, { message: err instanceof Error ? err.message : 'No se pudo bloquear al usuario.' });
+	}
+}
+
+export async function disableUserPredictionLockAction({ request, locals }: RequestEvent) {
+	const user = requireAdmin(locals);
+	const data = await request.formData();
+	const userId = String(data.get('userId') ?? '');
+	const tournamentId = String(data.get('tournamentId') ?? '');
+	try {
+		await disableUserPredictionLock({ userId, tournamentId, actorUserId: user.id });
+		return { ok: true };
+	} catch (err) {
+		return fail(400, { message: err instanceof Error ? err.message : 'No se pudo habilitar al usuario.' });
+	}
+}
+
 export async function createUserAction({ request, locals }: RequestEvent) {
 	requireAdmin(locals);
 	const data = await request.formData();
@@ -225,9 +254,10 @@ export async function editUserAction({ request, locals }: RequestEvent) {
 	const nickname = String(data.get('nickname') ?? '');
 	const roleInput = String(data.get('role') ?? 'player');
 	const role = roleInput === 'admin' ? 'admin' : 'player';
+	const password = String(data.get('password') ?? '');
 
 	try {
-		await updateUserByAdmin({ userId, nickname, role, actorUserId: user.id });
+		await updateUserByAdmin({ userId, nickname, role, password: password || undefined, actorUserId: user.id });
 		return { ok: true };
 	} catch (err) {
 		return fail(400, { message: err instanceof Error ? err.message : 'No se pudo editar usuario.' });

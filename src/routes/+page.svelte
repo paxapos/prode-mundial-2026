@@ -1,10 +1,11 @@
 <script lang="ts">
-	import { onMount, untrack } from 'svelte';
+	import { untrack } from 'svelte';
 	import { rankThirdPlacedGroups } from '$lib/bracket-rules';
 	import { formatMatchDate as formatDate, formatMatchTime as formatTime } from '$lib/match-datetime';
 	import { getFlagUrl, VENUES } from '$lib/teams';
 	import type { Match } from '$lib/types';
 	import BracketCanvas from '$lib/components/BracketCanvas.svelte';
+	import { getBroadcastsForMatch } from '$lib/broadcasts';
 
 	let { data } = $props();
 	let blogPageNumbers = $derived.by(() => {
@@ -63,12 +64,99 @@
 		return map;
 	});
 
-	onMount(() => {
-		if (shouldAutoScroll && bracketSection) {
-			setTimeout(() => {
-				bracketSection?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-			}, 400);
+	// Shift kickoff date by -3 hours to group 00:00-02:59 matches in previous day
+	function getShiftedDayKey(kickoffAt: string): string {
+		const date = new Date(kickoffAt);
+		const shifted = new Date(date.getTime() - 3 * 60 * 60 * 1000);
+		return shifted.toLocaleDateString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' });
+	}
+
+	function formatSelectorDay(dayKey: string): string {
+		const [year, month, day] = dayKey.split('-').map(Number);
+		// dayKey ya es el día calendario (AR) correcto. Lo construimos y formateamos en UTC
+		// para que el día de la semana/mes no se corra ni difiera entre SSR (UTC) y cliente.
+		const date = new Date(Date.UTC(year, month - 1, day));
+		let weekday = date.toLocaleDateString('es-AR', { weekday: 'short', timeZone: 'UTC' }).slice(0, 3);
+		let monthName = date.toLocaleDateString('es-AR', { month: 'short', timeZone: 'UTC' }).slice(0, 3);
+		weekday = weekday.replace('.', '');
+		monthName = monthName.replace('.', '');
+		const capitalizedWeekday = weekday.charAt(0).toUpperCase() + weekday.slice(1);
+		return `${capitalizedWeekday} ${day} ${monthName}`;
+	}
+
+	function formatNextMatchDate(isoString: string): string {
+		const date = new Date(isoString);
+		return date.toLocaleDateString('es-AR', {
+			weekday: 'long',
+			day: 'numeric',
+			month: 'long',
+			timeZone: 'America/Argentina/Buenos_Aires'
+		});
+	}
+
+	function getChannelBadgeClass(channel: string): string {
+		switch (channel) {
+			case 'TyC Sports':
+				return 'bg-blue-600 text-white border border-blue-500 font-extrabold shadow-sm';
+			case 'Telefe':
+				return 'bg-gradient-to-r from-blue-600 via-green-600 to-red-600 text-white font-extrabold shadow-sm';
+			case 'Disney+':
+				return 'bg-indigo-900 text-indigo-100 border border-indigo-700 font-bold';
+			case 'TV Pública':
+				return 'bg-red-700 text-white border border-red-600 font-bold';
+			case 'DSports':
+				return 'bg-slate-800 text-cyan-300 border border-cyan-800/40 font-bold';
+			case 'Paramount+':
+				return 'bg-sky-950 text-sky-300 border border-sky-800/40 font-bold';
+			case 'Flow':
+				return 'bg-emerald-950 text-emerald-300 border border-emerald-800/40 font-bold';
+			default:
+				return 'bg-slate-100 text-slate-600 border border-slate-200';
 		}
+	}
+
+	let matchesByDay = $derived.by(() => {
+		const groups: Record<string, Match[]> = {};
+		for (const match of data.matches || []) {
+			const key = getShiftedDayKey(match.kickoffAt);
+			if (!groups[key]) groups[key] = [];
+			groups[key].push(match);
+		}
+		for (const key in groups) {
+			groups[key].sort((a, b) => new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime());
+		}
+		return groups;
+	});
+
+	let sortedDays = $derived.by(() => {
+		return Object.keys(matchesByDay).sort((a, b) => a.localeCompare(b));
+	});
+
+	let nextMatch = $derived.by(() => {
+		const now = new Date();
+		const upcoming = (data.matches || [])
+			.filter((m: Match) => new Date(m.kickoffAt) > now)
+			.sort((a: Match, b: Match) => new Date(a.kickoffAt).getTime() - new Date(b.kickoffAt).getTime());
+		return upcoming[0] || null;
+	});
+
+	// Día por defecto: el del próximo partido; si no hay, hoy; si no, el primero con partidos.
+	// Es un $derived para que renderice en SSR (sin flash de vacío). El usuario puede sobreescribir.
+	function defaultDay(): string {
+		if (nextMatch) return getShiftedDayKey(nextMatch.kickoffAt);
+		const todayKey = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' });
+		if (matchesByDay[todayKey]) return todayKey;
+		return sortedDays[0] ?? '';
+	}
+	let userPickedDay = $state<string | null>(null);
+	let selectedDay = $derived(userPickedDay ?? defaultDay());
+
+	// Auto-scroll al bracket si ya empezó alguna llave (una sola vez, cuando el nodo existe).
+	let didAutoScroll = false;
+	$effect(() => {
+		if (didAutoScroll || !shouldAutoScroll || !bracketSection) return;
+		didAutoScroll = true;
+		setTimeout(() => bracketSection?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 400);
 	});
 
 	// Stage tabs navigation
@@ -118,6 +206,153 @@
 			<a href="/login" class="mt-3 inline-block rounded-lg bg-blue-600 px-6 py-2 text-sm font-bold text-white hover:bg-blue-700">Ingresar</a>
 		</div>
 	{/if}
+
+	<!-- PRÓXIMOS PARTIDOS Y CALENDARIO -->
+	<div class="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+		<!-- Section Header -->
+		<div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+			<div class="flex items-center gap-3">
+				<span class="text-3xl">📅</span>
+				<div>
+					<h2 class="text-xl font-black tracking-tight text-slate-900">Calendario de Partidos</h2>
+					<p class="text-xs text-slate-400">Navegá los partidos del Mundial día a día</p>
+				</div>
+			</div>
+			{#if nextMatch}
+				<div class="rounded-xl bg-sky-50 px-4 py-2 border border-sky-100 text-xs font-bold text-sky-800">
+					📢 Próximo partido: <span class="font-extrabold text-sky-900">{nextMatch.teamA} vs. {nextMatch.teamB}</span>
+					({formatNextMatchDate(nextMatch.kickoffAt)} - {formatTime(nextMatch.kickoffAt)} hs)
+				</div>
+			{/if}
+		</div>
+
+		<!-- Day Selector Carousel -->
+		{#if sortedDays.length > 0}
+			<div class="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-slate-200">
+				{#each sortedDays as dayKey}
+					<button
+						onclick={() => userPickedDay = dayKey}
+						class="shrink-0 rounded-xl px-4 py-3 text-center transition-all border {selectedDay === dayKey ? 'bg-sky-600 text-white border-sky-600 font-extrabold shadow-sm' : 'bg-slate-50 text-slate-600 border-slate-200/60 hover:bg-slate-100 hover:text-slate-800 font-semibold'}"
+					>
+						<span class="block text-xs uppercase tracking-wider opacity-80">{formatSelectorDay(dayKey).split(' ')[0]}</span>
+						<span class="block text-lg font-black leading-tight mt-0.5">{formatSelectorDay(dayKey).split(' ')[1]}</span>
+						<span class="block text-[10px] opacity-70 mt-0.5">{formatSelectorDay(dayKey).split(' ')[2]}</span>
+					</button>
+				{/each}
+			</div>
+		{/if}
+
+		<!-- Matches of Selected Day -->
+		{#if selectedDay && matchesByDay[selectedDay]}
+			<div class="grid gap-4 md:grid-cols-2">
+				{#each matchesByDay[selectedDay] as match}
+					{@const broadcasts = getBroadcastsForMatch(match)}
+					{@const stats = data.matchPredictionStats?.[match.id]}
+					
+					<div class="flex flex-col justify-between rounded-xl border border-slate-100 bg-slate-50/50 p-4 transition-all hover:border-slate-200 hover:shadow-sm">
+						<!-- Match header (Time, Group, Venue) -->
+						<div class="flex items-center justify-between text-[11px] font-semibold text-slate-400 mb-3">
+							<span class="flex items-center gap-1">
+								🕒 {formatTime(match.kickoffAt)} hs
+								{#if match.stage === 'groups'}
+									<span class="rounded bg-slate-200/80 px-1.5 py-0.5 text-[10px] text-slate-500">Grupo {match.groupCode}</span>
+								{:else}
+									<span class="rounded bg-purple-100 px-1.5 py-0.5 text-[10px] text-purple-700 font-bold">{match.stage.toUpperCase()}</span>
+								{/if}
+							</span>
+							<span class="truncate max-w-[150px]">📍 {venueCity(match.venue)}</span>
+						</div>
+
+						<!-- Teams Row -->
+						<div class="grid grid-cols-[1fr_auto_1fr] items-center gap-2 mb-3">
+							<!-- Team A -->
+							<div class="flex items-center justify-end gap-2.5 min-w-0">
+								<span class="truncate text-right text-xs sm:text-sm font-bold text-slate-800" title={match.teamA}>{match.teamA}</span>
+								{#if getFlagUrl(match.teamA)}
+									<img src={getFlagUrl(match.teamA, 40)} alt={match.teamA} class="h-5 w-7 shrink-0 rounded-sm object-cover shadow-sm border border-slate-100" />
+								{/if}
+							</div>
+							
+							<!-- Score/VS -->
+							<div class="flex items-center gap-1.5 px-2">
+								{#if match.scoreA !== null && match.scoreB !== null}
+									<span class="inline-flex h-7 w-7 items-center justify-center rounded bg-slate-900 text-xs font-bold text-white">
+										{match.scoreA}
+									</span>
+									<span class="text-[10px] font-bold text-slate-300">-</span>
+									<span class="inline-flex h-7 w-7 items-center justify-center rounded bg-slate-900 text-xs font-bold text-white">
+										{match.scoreB}
+									</span>
+								{:else}
+									<span class="rounded bg-slate-200/60 px-2.5 py-1 text-[11px] font-black text-slate-400">VS</span>
+								{/if}
+							</div>
+
+							<!-- Team B -->
+							<div class="flex items-center gap-2.5 min-w-0">
+								{#if getFlagUrl(match.teamB)}
+									<img src={getFlagUrl(match.teamB, 40)} alt={match.teamB} class="h-5 w-7 shrink-0 rounded-sm object-cover shadow-sm border border-slate-100" />
+								{/if}
+								<span class="truncate text-left text-xs sm:text-sm font-bold text-slate-800" title={match.teamB}>{match.teamB}</span>
+							</div>
+						</div>
+
+						<!-- Broadcasters Section -->
+						<div class="border-t border-slate-100/80 pt-3 flex flex-wrap items-center justify-between gap-2">
+							<div class="flex flex-wrap gap-1">
+								{#each broadcasts as channel}
+									<span class="rounded px-2 py-0.5 text-[9px] uppercase tracking-wider {getChannelBadgeClass(channel)}">
+										{channel}
+									</span>
+								{/each}
+							</div>
+							
+							<!-- Predictions Section -->
+							<div class="text-[10px] font-semibold text-slate-400">
+								📺 Televisa en AR
+							</div>
+						</div>
+
+						<!-- Prediction Percentage Bar -->
+						<div class="border-t border-slate-100/80 mt-3 pt-3">
+							{#if stats && stats.total > 0}
+								<div class="flex justify-between text-[10px] font-bold text-slate-500 mb-1">
+									<span class="truncate max-w-[100px]">{match.teamA} ({stats.winA}%)</span>
+									{#if match.stage === 'groups'}
+										<span>Empate ({stats.draw}%)</span>
+									{:else}
+										<span>Gana ({stats.winA > stats.winB ? stats.winA : stats.winB}%)</span>
+									{/if}
+									<span class="truncate max-w-[100px]">{match.teamB} ({stats.winB}%)</span>
+								</div>
+								<div class="flex h-1.5 w-full overflow-hidden rounded-full bg-slate-200/60">
+									<div class="bg-blue-500" style="width: {stats.winA}%" title="Gana {match.teamA}: {stats.winA}%"></div>
+									{#if match.stage === 'groups'}
+										<div class="bg-slate-400" style="width: {stats.draw}%" title="Empate: {stats.draw}%"></div>
+									{/if}
+									<div class="bg-emerald-500" style="width: {stats.winB}%" title="Gana {match.teamB}: {stats.winB}%"></div>
+								</div>
+								<div class="flex justify-between text-[9px] text-slate-400 mt-1">
+									<span>Pronósticos cargados</span>
+									<span>{stats.total} votos</span>
+								</div>
+							{:else}
+								<div class="flex items-center justify-between text-[10px] text-slate-400">
+									<span>Tendencias disponibles cuando el partido sea el próximo</span>
+									<span>🔒</span>
+								</div>
+							{/if}
+						</div>
+					</div>
+				{/each}
+			</div>
+		{:else}
+			<div class="rounded-xl border border-dashed border-slate-200 p-8 text-center text-slate-400 text-sm font-semibold bg-slate-50/30">
+				No hay partidos programados para este día.
+			</div>
+		{/if}
+	</div>
+
 
 	<!-- La pizarra del DT -->
 	{#if data.blogPosts?.length}
@@ -270,9 +505,9 @@
 									<span>{venueCity(match.venue)}</span>
 								</div>
 								<!-- Teams + score row (6-col aligned grid) -->
-								<div class="grid grid-cols-[1fr_28px_32px_32px_28px_1fr] items-center gap-x-2">
+								<div class="grid grid-cols-[1fr_1.75rem_2rem_2rem_1.75rem_1fr] items-center gap-x-2">
 									<!-- Col 1: Team A name (right-aligned) -->
-									<span class="truncate text-right text-sm font-semibold text-slate-800">{match.teamA}</span>
+									<span class="truncate text-right text-xs sm:text-sm font-semibold text-slate-800" title={match.teamA}>{match.teamA}</span>
 									<!-- Col 2: Team A flag -->
 									<div class="flex justify-center">
 										{#if getFlagUrl(match.teamA)}
@@ -294,7 +529,7 @@
 										{/if}
 									</div>
 									<!-- Col 6: Team B name (left-aligned) -->
-									<span class="truncate text-left text-sm font-semibold text-slate-800">{match.teamB}</span>
+									<span class="truncate text-left text-xs sm:text-sm font-semibold text-slate-800" title={match.teamB}>{match.teamB}</span>
 								</div>
 							</div>
 						{/each}

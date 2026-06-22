@@ -1,5 +1,5 @@
 import { getMatchOutcome, resolveWinner, R32_DEFS } from '$lib/bracket-rules';
-import { buildBracket, type LivePred } from '$lib/bracket-engine';
+import type { BracketSlot } from '$lib/bracket-engine';
 import { getStageConfig } from '$lib/scoring-config';
 import { getTeamId } from '$lib/teams';
 import type {
@@ -133,9 +133,12 @@ function r32SlotLabel(matchId: string, side: 'A' | 'B'): string {
  * Solo se evalúa un casillero cuando está resuelto de ambos lados: el equipo real es un equipo
  * de verdad (no un placeholder tipo "2° Grupo A") y el pronóstico del usuario resolvió ese
  * casillero (`autoA/autoB` del bracket pronosticado).
+ *
+ * Recibe el bracket pronosticado ya construido (`buildPredictedBracket`) para no reconstruirlo:
+ * el leaderboard lo arma una sola vez por usuario y lo reutiliza acá.
  */
 export function calculateGroupStagePoints(
-	prediction: Prediction[],
+	predictedBracket: Record<string, BracketSlot>,
 	matches: Match[],
 	config: ScoringConfig
 ): GroupStagePointResult {
@@ -151,12 +154,6 @@ export function calculateGroupStagePoints(
 		realTeams.add(getTeamId(m.teamA));
 		realTeams.add(getTeamId(m.teamB));
 	}
-
-	const userPreds: Record<string, LivePred> = {};
-	for (const p of prediction) {
-		userPreds[p.matchId] = { predA: p.predA, predB: p.predB, predPenaltyWinner: p.predPenaltyWinner };
-	}
-	const predictedBracket = buildBracket(matches, userPreds);
 
 	const details: GroupPositionPointDetail[] = [];
 	let totalPoints = 0;

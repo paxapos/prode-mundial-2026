@@ -383,6 +383,14 @@ export async function updateUserByAdmin(input: { userId: string; nickname: strin
 	const [dupe] = await db.select().from(users).where(eq(users.nickname, nickname)).limit(1);
 	if (dupe && dupe.id !== id) throw new Error('Ese nickname ya está en uso.');
 
+	// Guarda: no degradar al último admin (dejaría a todos afuera del panel de admin).
+	if (existing.role === 'admin' && input.role !== 'admin') {
+		const admins = await db.select({ id: users.id }).from(users).where(eq(users.role, 'admin'));
+		if (admins.length <= 1) {
+			throw new Error('No se puede quitar el rol de admin: es el último administrador.');
+		}
+	}
+
 	const toUpdate = input.password
 		? { nickname, role: input.role, passwordHash: hashPassword(assertPassword(input.password)) }
 		: { nickname, role: input.role };
@@ -1144,6 +1152,12 @@ export async function setUserPredictionUnlock(input: {
 		})
 		.returning();
 
+	// Exclusión mutua: habilitar el "unlock" deshabilita cualquier "lock" activo del mismo usuario.
+	await db
+		.update(predictionLocks)
+		.set({ enabled: false, updatedBy: Number(input.actorUserId), updatedAt: now })
+		.where(and(eq(predictionLocks.userId, Number(input.userId)), eq(predictionLocks.tournamentId, sourceId)));
+
 	await createAuditLog({
 		userId: Number(input.actorUserId),
 		action: 'prediction_unlock_enabled',
@@ -1228,6 +1242,12 @@ export async function setUserPredictionLock(input: {
 			}
 		})
 		.returning();
+
+	// Exclusión mutua: habilitar el "lock" deshabilita cualquier "unlock" activo del mismo usuario.
+	await db
+		.update(predictionEditUnlocks)
+		.set({ enabled: false, updatedBy: Number(input.actorUserId), updatedAt: now })
+		.where(and(eq(predictionEditUnlocks.userId, Number(input.userId)), eq(predictionEditUnlocks.tournamentId, sourceId)));
 
 	await createAuditLog({
 		userId: Number(input.actorUserId),
@@ -1661,7 +1681,7 @@ async function getLeaderboardUncached(tournamentId: string): Promise<Leaderboard
 			if (points.exactHit) exactHits += 1;
 			else if (points.outcomeHit) outcomeHits += 1;
 		}
-		const groupStage = calculateGroupStagePoints(userPredictions, matches, config);
+		const groupStage = calculateGroupStagePoints(predictedBracket, matches, config);
 		totalPoints += groupStage.totalPoints;
 		bracketPoints += groupStage.totalPoints;
 		return { userId: user.id, nickname: user.nickname, role: user.role, avatarUrl: user.avatarUrl, totalPoints, exactHits, outcomeHits, bracketPoints };
@@ -1719,7 +1739,8 @@ export async function getPlayerGroupStageDetails(userId: string, tournamentId: s
 	]);
 	const matches = matchRows.map(toMatch);
 	const predictions = predRows.map(toPrediction);
-	return calculateGroupStagePoints(predictions, matches, sourceTournament.scoringConfig);
+	const predictedBracket = buildPredictedBracket(matches, predictions);
+	return calculateGroupStagePoints(predictedBracket, matches, sourceTournament.scoringConfig);
 }
 
 export async function updateMatchTeams(input: {

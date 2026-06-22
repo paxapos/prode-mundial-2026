@@ -105,7 +105,8 @@ import type { Match } from '$lib/types';
 	}
 
 	function canEditMatch(match: Match): boolean {
-		return data.canEditPredictions === true && !match.isClosed && Date.now() < new Date(match.kickoffAt).getTime();
+		const tenMinutesBeforeKickoff = new Date(match.kickoffAt).getTime() - 10 * 60 * 1000;
+		return data.canEditPredictions === true && !match.isClosed && Date.now() < tenMinutesBeforeKickoff;
 	}
 
 	function updateScore(matchId: string, field: 'predA' | 'predB', value: string) {
@@ -364,7 +365,16 @@ import type { Match } from '$lib/types';
 							<div class="group relative py-2.5">
 								<!-- Date / Venue -->
 								<div class="mb-1.5 flex items-center justify-between text-[10px] text-slate-400">
-									<span>{formatDateShort(match.kickoffAt)} · {formatTime(match.kickoffAt)}</span>
+									<div class="flex items-center gap-1.5">
+										<span>{formatDateShort(match.kickoffAt)} · {formatTime(match.kickoffAt)}</span>
+										{#if !matchCanEdit && data.canEditPredictions === true && !match.isClosed}
+											{@const kickoffTime = new Date(match.kickoffAt).getTime()}
+											{@const tenMinutesBefore = kickoffTime - 10 * 60 * 1000}
+											{#if Date.now() >= tenMinutesBefore && Date.now() < kickoffTime}
+												<span class="rounded bg-rose-100 px-1.5 py-0.5 text-[8px] font-bold text-rose-700">⏳ Bloqueado (Faltan menos de 10m)</span>
+											{/if}
+										{/if}
+									</div>
 									<div class="flex items-center gap-1.5">
 										{#if matchCanEdit && status === 'saving'}
 											<span class="h-3 w-3 animate-spin rounded-full border-2 border-amber-400 border-t-transparent"></span>
@@ -381,7 +391,7 @@ import type { Match } from '$lib/types';
 								<div class="grid grid-cols-[minmax(0,1fr)_2.5rem_2.5rem_minmax(0,1fr)] items-center gap-1.5 sm:gap-2">
 									<!-- Team A (right-aligned) -->
 									<div class="flex min-w-0 items-center justify-end gap-1.5">
-										<span class="truncate text-right text-sm font-semibold text-slate-800">{match.teamA}</span>
+										<span class="truncate text-right text-xs sm:text-sm font-semibold text-slate-800" title={match.teamA}>{match.teamA}</span>
 										{#if getFlagUrl(match.teamA)}
 											<img src={getFlagUrl(match.teamA, 40)} alt="" class="h-5 w-7 shrink-0 rounded-sm object-cover shadow-sm" />
 										{/if}
@@ -428,7 +438,7 @@ import type { Match } from '$lib/types';
 										{#if getFlagUrl(match.teamB)}
 											<img src={getFlagUrl(match.teamB, 40)} alt="" class="h-5 w-7 shrink-0 rounded-sm object-cover shadow-sm" />
 										{/if}
-										<span class="truncate text-sm font-semibold text-slate-800">{match.teamB}</span>
+										<span class="truncate text-xs sm:text-sm font-semibold text-slate-800" title={match.teamB}>{match.teamB}</span>
 									</div>
 								</div>
 
@@ -480,7 +490,7 @@ import type { Match } from '$lib/types';
 					>
 						<!-- Match header -->
 						<div class="flex items-center justify-between px-4 py-2.5 {isFinalMatch ? 'bg-amber-100/60' : is3rd ? 'bg-orange-100/60' : 'bg-slate-50'}">
-							<div class="flex items-center gap-2">
+							<div class="flex flex-wrap items-center gap-2">
 								{#if isFinalMatch}
 									<span class="text-lg">👑</span>
 									<span class="text-xs font-bold text-amber-700">FINAL</span>
@@ -491,6 +501,13 @@ import type { Match } from '$lib/types';
 									<span class="text-xs font-medium text-slate-500">
 										{formatDateShort(match.kickoffAt)} · {formatTime(match.kickoffAt)}
 									</span>
+								{/if}
+								{#if !matchCanEdit && data.canEditPredictions === true && !match.isClosed}
+									{@const kickoffTime = new Date(match.kickoffAt).getTime()}
+									{@const tenMinutesBefore = kickoffTime - 10 * 60 * 1000}
+									{#if Date.now() >= tenMinutesBefore && Date.now() < kickoffTime}
+										<span class="rounded bg-rose-100 px-1.5 py-0.5 text-[8px] font-bold text-rose-700">⏳ Bloqueado (Faltan menos de 10m)</span>
+									{/if}
 								{/if}
 							</div>
 							<div class="flex items-center gap-1.5">

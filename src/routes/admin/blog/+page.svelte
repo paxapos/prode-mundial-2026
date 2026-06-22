@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import type { BlogPost } from '$lib/types';
+	import RichTextEditor from '$lib/components/RichTextEditor.svelte';
 
 	let { data } = $props();
 	let editingPostId = $state<string | null>(null);
@@ -8,6 +9,7 @@
 	let editExcerpt = $state('');
 	let editBody = $state('');
 	let editRemoveImage = $state(false);
+	let newBody = $state('');
 
 	function startEditPost(post: BlogPost) {
 		editingPostId = post.id;
@@ -31,7 +33,7 @@
 		<h2 class="mb-1 text-lg font-black text-slate-800">✍️ Escribir nueva columna</h2>
 		<p class="mb-4 text-xs text-slate-400">Título, descripción corta, imagen principal y contenido. Podés pegar HTML básico si necesitás formato.</p>
 
-		<form method="POST" action="?/createPost" enctype="multipart/form-data" use:enhance class="space-y-4">
+		<form method="POST" action="?/createPost" enctype="multipart/form-data" use:enhance={() => { return async ({ update, result }) => { await update(); if (result.type === 'success') newBody = ''; }; }} class="space-y-4">
 			<div>
 				<label for="post-title" class="mb-1 block text-xs font-bold text-slate-500">Título</label>
 				<input id="post-title" name="title" type="text" required placeholder="Ej: Por qué Scaloni es un genio táctico" class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20" />
@@ -47,7 +49,7 @@
 			</div>
 			<div>
 				<label for="post-body" class="mb-1 block text-xs font-bold text-slate-500">Contenido de la columna</label>
-				<textarea id="post-body" name="body" required rows="12" placeholder="Escribí acá tu columna..." class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm leading-relaxed text-slate-700 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20"></textarea>
+				<RichTextEditor name="body" bind:value={newBody} placeholder="Escribí acá tu columna..." />
 			</div>
 			<button type="submit" class="w-full rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-700">📤 Publicar columna</button>
 		</form>
@@ -83,7 +85,7 @@
 							{#if post.imageUrl && !editRemoveImage}<img src={post.imageUrl} alt={post.title} loading="lazy" decoding="async" class="h-28 w-full rounded-lg object-cover shadow-sm" />{/if}
 							<div>
 								<label for={`edit-post-body-${post.id}`} class="mb-1 block text-xs font-bold text-slate-500">Contenido</label>
-								<textarea id={`edit-post-body-${post.id}`} name="body" bind:value={editBody} required rows="10" class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm leading-relaxed text-slate-700 outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20"></textarea>
+								<RichTextEditor name="body" bind:value={editBody} placeholder="Escribí acá tu columna..." />
 							</div>
 							<div class="flex flex-wrap justify-end gap-2">
 								<button type="button" onclick={resetEditPostEditor} class="rounded-lg bg-slate-200 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-300">Cancelar</button>

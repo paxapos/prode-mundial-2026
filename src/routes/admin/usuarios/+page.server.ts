@@ -3,13 +3,15 @@ import {
 	createUserAction,
 	disableUserPredictionUnlockAction,
 	editUserAction,
-	enableUserPredictionUnlockAction
+	enableUserPredictionUnlockAction,
+	disableUserPredictionLockAction,
+	enableUserPredictionLockAction
 } from '$lib/server/admin-actions';
 import {
 	listLigas,
-	listPredictionChangeAuditForUser,
+	getPredictionChangeAuditsAndSummaries,
 	listPredictionUnlocksForTournament,
-	listUserPredictionChangeSummaries,
+	listPredictionLocksForTournament,
 	listUsers
 } from '$lib/server/state';
 
@@ -28,19 +30,10 @@ export const load: PageServerLoad = async ({ parent }) => {
 		throw error;
 	}
 
-	const [ligas, changeSummaries, predictionUnlocks] = await Promise.all([
+	const [ligas, predictionUnlocks, predictionLocks, auditData] = await Promise.all([
 		ligasParentId
 			? listLigas(ligasParentId).catch((error) => {
 				console.error('[admin/usuarios] listLigas failed', { ligasParentId, error });
-				return [];
-			})
-			: Promise.resolve([]),
-		selectedTournament
-			? listUserPredictionChangeSummaries(selectedTournament.id).catch((error) => {
-				console.error('[admin/usuarios] listUserPredictionChangeSummaries failed', {
-					tournamentId: selectedTournament.id,
-					error
-				});
 				return [];
 			})
 			: Promise.resolve([]),
@@ -52,34 +45,37 @@ export const load: PageServerLoad = async ({ parent }) => {
 				});
 				return [];
 			})
-			: Promise.resolve([])
+			: Promise.resolve([]),
+		selectedTournament
+			? listPredictionLocksForTournament(selectedTournament.id).catch((error) => {
+				console.error('[admin/usuarios] listPredictionLocksForTournament failed', {
+					tournamentId: selectedTournament.id,
+					error
+				});
+				return [];
+			})
+			: Promise.resolve([]),
+		selectedTournament
+			? getPredictionChangeAuditsAndSummaries(selectedTournament.id).catch((error) => {
+				console.error('[admin/usuarios] getPredictionChangeAuditsAndSummaries failed', {
+					tournamentId: selectedTournament.id,
+					error
+				});
+				return { changeSummaries: [], predictionChangeAudit: {} as Record<string, import('$lib/types').PredictionChangeAudit[]> };
+			})
+			: Promise.resolve({ changeSummaries: [], predictionChangeAudit: {} as Record<string, import('$lib/types').PredictionChangeAudit[]> })
 	]);
 
-	const predictionChangeAudit = selectedTournament
-		? Object.fromEntries(
-			await Promise.all(
-				users.map(async (user) => {
-					try {
-						return [user.id, await listPredictionChangeAuditForUser(user.id, selectedTournament.id)] as const;
-					} catch (error) {
-						console.error('[admin/usuarios] listPredictionChangeAuditForUser failed', {
-							userId: user.id,
-							tournamentId: selectedTournament.id,
-							error
-						});
-						return [user.id, []] as const;
-					}
-				})
-			)
-		)
-		: {};
+	const { changeSummaries, predictionChangeAudit } = auditData;
 
-	return { users, ligas, changeSummaries, predictionUnlocks, predictionChangeAudit };
+	return { users, ligas, changeSummaries, predictionUnlocks, predictionLocks, predictionChangeAudit };
 };
 
 export const actions: Actions = {
 	createUser: createUserAction,
 	editUser: editUserAction,
 	enablePredictionUnlock: enableUserPredictionUnlockAction,
-	disablePredictionUnlock: disableUserPredictionUnlockAction
+	disablePredictionUnlock: disableUserPredictionUnlockAction,
+	enablePredictionLock: enableUserPredictionLockAction,
+	disablePredictionLock: disableUserPredictionLockAction
 };

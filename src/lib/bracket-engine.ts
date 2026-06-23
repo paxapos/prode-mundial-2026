@@ -101,6 +101,72 @@ export function calcStandings(
 }
 
 /* ------------------------------------------------------------------ */
+/*  Group position accuracy (prediction vs. reality)                  */
+/* ------------------------------------------------------------------ */
+
+export interface GroupPositionAccuracy {
+	/** Cantidad de grupos cuyos partidos ya tienen todos resultado real (definidos). */
+	decidedGroups: number;
+	/** Posiciones comparadas en total (suma de equipos de los grupos definidos). */
+	totalPositions: number;
+	/** Posiciones en las que el equipo pronosticado coincide con el real. */
+	correctPositions: number;
+	/** Porcentaje 0-100 redondeado, o null si todavía no hay ningún grupo definido. */
+	pct: number | null;
+}
+
+/**
+ * Compara la tabla de posiciones que arman las predicciones del usuario contra
+ * la tabla real (según los resultados cargados). Sólo cuenta los grupos que ya
+ * están completamente jugados, para que el porcentaje refleje aciertos firmes.
+ */
+export function calcGroupPositionAccuracy(
+	groupMatches: Match[],
+	preds: Record<string, LivePred>
+): GroupPositionAccuracy {
+	// Reutilizamos calcStandings tratando los resultados reales como "predicciones".
+	const realPreds: Record<string, LivePred> = {};
+	for (const m of groupMatches) {
+		if (m.scoreA === null || m.scoreB === null) continue;
+		realPreds[m.id] = { predA: m.scoreA, predB: m.scoreB, predPenaltyWinner: m.penaltyWinner };
+	}
+
+	const predictedStandings = calcStandings(groupMatches, preds);
+	const actualStandings = calcStandings(groupMatches, realPreds);
+
+	const totalByGroup = new Map<string, number>();
+	const playedByGroup = new Map<string, number>();
+	for (const m of groupMatches) {
+		const g = m.groupCode ?? '?';
+		totalByGroup.set(g, (totalByGroup.get(g) ?? 0) + 1);
+		if (m.scoreA !== null && m.scoreB !== null) {
+			playedByGroup.set(g, (playedByGroup.get(g) ?? 0) + 1);
+		}
+	}
+
+	let decidedGroups = 0;
+	let totalPositions = 0;
+	let correctPositions = 0;
+
+	for (const [g, total] of totalByGroup) {
+		if ((playedByGroup.get(g) ?? 0) < total) continue; // grupo aún sin terminar
+		const predicted = predictedStandings[g] ?? [];
+		const actual = actualStandings[g] ?? [];
+		if (actual.length === 0) continue;
+		decidedGroups++;
+		totalPositions += actual.length;
+		for (let i = 0; i < actual.length; i++) {
+			if (predicted[i] && actual[i] && predicted[i].team === actual[i].team) {
+				correctPositions++;
+			}
+		}
+	}
+
+	const pct = totalPositions > 0 ? Math.round((correctPositions / totalPositions) * 100) : null;
+	return { decidedGroups, totalPositions, correctPositions, pct };
+}
+
+/* ------------------------------------------------------------------ */
 /*  Winner / loser helper                                             */
 /* ------------------------------------------------------------------ */
 

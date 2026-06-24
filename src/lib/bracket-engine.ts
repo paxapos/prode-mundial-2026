@@ -5,6 +5,7 @@
  */
 import type { Match, GroupStandingRow, SideWinner } from '$lib/types';
 import { FLOW, R32_DEFS, resolveBestThirds, resolveWinner, sortGroupStandingRows, teamAt } from '$lib/bracket-rules';
+import { getTeamId, getTeamInfo } from '$lib/teams';
 
 export interface LivePred {
 	predA: number | null;
@@ -279,4 +280,62 @@ export function buildBracket(
 	}
 
 	return bracket;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Knockout slot accuracy (prediction vs. reality)                   */
+/* ------------------------------------------------------------------ */
+
+export interface KnockoutSlotEvaluation {
+	/** Equipo real en el lado A (o placeholder si todavía no se definió). */
+	realA: string;
+	/** Equipo real en el lado B (o placeholder si todavía no se definió). */
+	realB: string;
+	/** El cruce real del lado A ya está definido (es un equipo concreto, no un placeholder). */
+	realAKnown: boolean;
+	/** El cruce real del lado B ya está definido (es un equipo concreto, no un placeholder). */
+	realBKnown: boolean;
+	/** El usuario falló el lado A: el real ya está definido y no coincide con su pronóstico. */
+	missedA: boolean;
+	/** El usuario falló el lado B: el real ya está definido y no coincide con su pronóstico. */
+	missedB: boolean;
+	/**
+	 * El usuario no tiene los equipos reales de esta llave, así que no puede competir por el
+	 * resultado del partido (no sumaría puntos de resultado/exacto). Sólo es true cuando el
+	 * cruce real ya está definido y difiere del bracket pronosticado.
+	 */
+	cannotCompete: boolean;
+}
+
+/**
+ * Compara el cruce que el usuario armó con sus pronósticos (`slot`, propagado por
+ * `buildBracket`) contra el cruce real del partido (`match.teamA`/`match.teamB`, ya
+ * sincronizado desde los resultados cargados).
+ *
+ * Un lado se marca como "fallado" sólo cuando el equipo real ya está definido —es un equipo
+ * concreto, no un placeholder tipo "1° Grupo A" o "Ganador M73"— y no coincide con el equipo
+ * que el usuario tiene en ese casillero. Mientras el cruce real no esté definido no se marca
+ * nada: el usuario sigue compitiendo y pronosticando normalmente.
+ */
+export function evaluateKnockoutSlot(
+	match: Pick<Match, 'teamA' | 'teamB'>,
+	slot: BracketSlot | undefined
+): KnockoutSlotEvaluation {
+	const realA = match.teamA;
+	const realB = match.teamB;
+	const predA = slot?.teamA ?? match.teamA;
+	const predB = slot?.teamB ?? match.teamB;
+	const realAKnown = getTeamInfo(realA) !== null;
+	const realBKnown = getTeamInfo(realB) !== null;
+	const missedA = realAKnown && getTeamId(predA) !== getTeamId(realA);
+	const missedB = realBKnown && getTeamId(predB) !== getTeamId(realB);
+	return {
+		realA,
+		realB,
+		realAKnown,
+		realBKnown,
+		missedA,
+		missedB,
+		cannotCompete: missedA || missedB
+	};
 }

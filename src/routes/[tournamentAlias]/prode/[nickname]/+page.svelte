@@ -5,7 +5,7 @@
 	import { Badge } from 'flowbite-svelte';
 	const ogImage = $derived(`${$page.url.origin}/og-image.jpg`);
 	import { getFlagUrl, GROUPS, VENUES } from '$lib/teams';
-	import { calcStandings, buildBracket, calcGroupPositionAccuracy, type LivePred } from '$lib/bracket-engine';
+	import { calcStandings, buildBracket, calcGroupPositionAccuracy, evaluateKnockoutSlot, type LivePred } from '$lib/bracket-engine';
 	import { rankThirdPlacedGroups } from '$lib/bracket-rules';
 	import { formatMatchDate as formatDateShort, formatMatchTime as formatTime } from '$lib/match-datetime';
 	import { STAGE_LABELS } from '$lib/scoring-config';
@@ -156,9 +156,18 @@
 		return data.canEditPredictions && !match.isClosed && Date.now() < tenMinutesBeforeKickoff;
 	}
 
+	/**
+	 * En la fase de llaves, si el cruce real ya está definido y el usuario no tiene esos
+	 * equipos en su bracket, no puede competir por el resultado: bloqueamos la carga.
+	 */
+	function bracketResultBlocked(match: Match): boolean {
+		if (match.stage === 'groups') return false;
+		return evaluateKnockoutSlot(match, bracket[match.id]).cannotCompete;
+	}
+
 	function updateScore(matchId: string, field: 'predA' | 'predB', value: string) {
 		const match = data.matches.find((item: Match) => item.id === matchId);
-		if (!match || !canEditMatch(match)) return;
+		if (!match || !canEditMatch(match) || bracketResultBlocked(match)) return;
 		const num = value === '' ? null : parseInt(value, 10);
 		if (num !== null && (isNaN(num) || num < 0)) return;
 		const current = preds[matchId] ?? { predA: null, predB: null, predPenaltyWinner: null };
@@ -170,7 +179,7 @@
 
 	function updatePenalty(matchId: string, value: string) {
 		const match = data.matches.find((item: Match) => item.id === matchId);
-		if (!match || !canEditMatch(match)) return;
+		if (!match || !canEditMatch(match) || bracketResultBlocked(match)) return;
 		const current = preds[matchId] ?? { predA: null, predB: null, predPenaltyWinner: null };
 		preds[matchId] = {
 			...current,
@@ -183,7 +192,7 @@
 
 	function scheduleAutoSave(matchId: string) {
 		const match = data.matches.find((item: Match) => item.id === matchId);
-		if (!match || !canEditMatch(match)) return;
+		if (!match || !canEditMatch(match) || bracketResultBlocked(match)) return;
 		if (saveTimers[matchId]) clearTimeout(saveTimers[matchId]);
 		saveTimers[matchId] = setTimeout(() => {
 			delete saveTimers[matchId];
@@ -193,7 +202,7 @@
 
 	async function autoSave(matchId: string) {
 		const match = data.matches.find((item: Match) => item.id === matchId);
-		if (!match || !canEditMatch(match)) return;
+		if (!match || !canEditMatch(match) || bracketResultBlocked(match)) return;
 		if (saveTimers[matchId]) {
 			clearTimeout(saveTimers[matchId]);
 			delete saveTimers[matchId];
@@ -224,7 +233,7 @@
 
 	function handleBlur(matchId: string) {
 		const match = data.matches.find((item: Match) => item.id === matchId);
-		if (!match || !canEditMatch(match)) return;
+		if (!match || !canEditMatch(match) || bracketResultBlocked(match)) return;
 		const pred = preds[matchId];
 		if (pred && pred.predA !== null && pred.predB !== null) autoSave(matchId);
 	}
@@ -238,7 +247,7 @@
 		if (!data.canEditPredictions) return;
 		for (const matchId of Object.keys(saveTimers)) {
 			const match = data.matches.find((item: Match) => item.id === matchId);
-			if (!match || !canEditMatch(match)) continue;
+			if (!match || !canEditMatch(match) || bracketResultBlocked(match)) continue;
 			clearTimeout(saveTimers[matchId]);
 			delete saveTimers[matchId];
 			const pred = preds[matchId];
@@ -727,15 +736,19 @@
 					{@const isAuto = slot?.autoA || slot?.autoB}
 					{@const status = saveStatus[match.id] ?? 'idle'}
 					{@const matchCanEdit = canEditMatch(match)}
+					{@const slotEval = evaluateKnockoutSlot(match, slot)}
+					{@const canEnterResult = matchCanEdit && !slotEval.cannotCompete}
 					{@const isFinalMatch = match.id === 'final'}
 					{@const is3rd = match.id === '3rd'}
 					<div
-						class="card-3d overflow-hidden rounded-2xl border shadow-lg transition-all duration-300
+						class="card-3d overflow-hidden rounded-2xl border shadow-lg transition-all duration-300 {slotEval.bothMissed ? 'opacity-70' : ''}
 						{isFinalMatch
 							? 'border-amber-300 bg-gradient-to-br from-amber-50 to-white ring-2 ring-amber-200'
 							: is3rd
 								? 'border-orange-200 bg-gradient-to-br from-orange-50 to-white'
-								: 'border-slate-200 bg-white hover:shadow-xl'}"
+								: slotEval.bothMissed
+									? 'border-slate-300 bg-slate-50'
+									: 'border-slate-200 bg-white hover:shadow-xl'}"
 					>
 						<!-- Match header -->
 						<div class="flex items-center justify-between px-4 py-2.5 {isFinalMatch ? 'bg-amber-100/60' : is3rd ? 'bg-orange-100/60' : 'bg-slate-50'}">
@@ -760,7 +773,7 @@
 								{/if}
 							</div>
 							<div class="flex items-center gap-1.5">
-								{#if matchCanEdit}
+								{#if canEnterResult}
 									{#if status === 'saving'}
 										<span class="h-3 w-3 animate-spin rounded-full border-2 border-amber-400 border-t-transparent"></span>
 									{:else if status === 'saved'}
@@ -774,20 +787,44 @@
 						</div>
 
 						<div class="space-y-3 p-4">
+							<!-- Bracket fallado: el usuario no tiene los equipos reales de esta llave -->
+							{#if slotEval.bothMissed}
+								<div class="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2">
+									<span class="text-sm leading-none">💀</span>
+									<p class="text-[11px] font-bold leading-tight text-rose-600">
+										Llave perdida: fallaste los dos equipos de este cruce. Es imposible sumar puntos en este partido.
+									</p>
+								</div>
+							{:else if slotEval.cannotCompete}
+								<div class="flex items-start gap-2 rounded-xl border border-slate-300 bg-slate-100 px-3 py-2">
+									<span class="text-sm leading-none">🔒</span>
+									<p class="text-[11px] font-semibold leading-tight text-slate-500">
+										No tenés los dos equipos que clasificaron a esta llave: no podés competir por el resultado de este partido.
+									</p>
+								</div>
+							{/if}
+
 							<!-- Team A -->
-							<div class="flex items-center justify-between rounded-xl p-2.5 transition-colors {pred.predA !== null && pred.predB !== null && ((pred.predA > pred.predB) || (pred.predA === pred.predB && pred.predPenaltyWinner === 'A')) ? 'bg-emerald-50 ring-1 ring-emerald-200' : 'bg-slate-50'}">
-								<div class="flex items-center gap-2.5">
+							<div class="flex items-center justify-between rounded-xl p-2.5 transition-colors {slotEval.missedA ? 'bg-slate-100' : !slotEval.cannotCompete && pred.predA !== null && pred.predB !== null && ((pred.predA > pred.predB) || (pred.predA === pred.predB && pred.predPenaltyWinner === 'A')) ? 'bg-emerald-50 ring-1 ring-emerald-200' : 'bg-slate-50'}">
+								<div class="flex min-w-0 items-center gap-2.5">
 									{#if getFlagUrl(teamA)}
-										<img src={getFlagUrl(teamA, 48)} alt="" class="h-7 w-10 rounded object-cover shadow-sm" />
+										<img src={getFlagUrl(teamA, 48)} alt="" class="h-7 w-10 shrink-0 rounded object-cover shadow-sm {slotEval.missedA ? 'opacity-40 grayscale' : ''}" />
 									{/if}
-									<div>
-										<span class="text-sm font-bold text-slate-800">{teamA}</span>
-										{#if slot?.autoA}
+									<div class="min-w-0">
+										<span class="text-sm font-bold {slotEval.missedA ? 'text-slate-400 line-through' : 'text-slate-800'}">{teamA}</span>
+										{#if slotEval.missedA}
+											<span class="ml-1.5 inline-flex items-center gap-1 rounded bg-slate-200 px-1.5 py-0.5 text-[8px] font-bold text-slate-600">
+												{#if getFlagUrl(slotEval.realA)}<img src={getFlagUrl(slotEval.realA, 20)} alt="" class="h-2.5 w-3.5 rounded-sm object-cover" />{/if}
+												Clasificó: {slotEval.realA}
+											</span>
+										{:else if slotEval.correctA}
+											<span class="ml-1.5 rounded bg-emerald-100 px-1 py-0.5 text-[8px] font-bold text-emerald-700">✓ Acertaste</span>
+										{:else if slot?.autoA}
 											<span class="ml-1.5 rounded bg-sky-100 px-1 py-0.5 text-[8px] font-bold text-sky-600">AUTO</span>
 										{/if}
 									</div>
 								</div>
-								{#if matchCanEdit}
+								{#if canEnterResult}
 									<input
 										type="number"
 										min="0"
@@ -799,7 +836,7 @@
 										focus:border-amber-400 focus:ring-2 focus:ring-amber-400/30"
 									/>
 								{:else}
-									<span class="flex h-10 w-12 items-center justify-center rounded-lg border-2 border-slate-200 bg-slate-50 text-base font-black text-slate-800">
+									<span class="flex h-10 w-12 items-center justify-center rounded-lg border-2 text-base font-black {slotEval.missedA ? 'border-slate-100 bg-slate-50 text-slate-300' : 'border-slate-200 bg-slate-50 text-slate-800'}">
 										{pred.predA ?? '-'}
 									</span>
 								{/if}
@@ -813,19 +850,26 @@
 							</div>
 
 							<!-- Team B -->
-							<div class="flex items-center justify-between rounded-xl p-2.5 transition-colors {pred.predA !== null && pred.predB !== null && ((pred.predB > pred.predA) || (pred.predA === pred.predB && pred.predPenaltyWinner === 'B')) ? 'bg-emerald-50 ring-1 ring-emerald-200' : 'bg-slate-50'}">
-								<div class="flex items-center gap-2.5">
+							<div class="flex items-center justify-between rounded-xl p-2.5 transition-colors {slotEval.missedB ? 'bg-slate-100' : !slotEval.cannotCompete && pred.predA !== null && pred.predB !== null && ((pred.predB > pred.predA) || (pred.predA === pred.predB && pred.predPenaltyWinner === 'B')) ? 'bg-emerald-50 ring-1 ring-emerald-200' : 'bg-slate-50'}">
+								<div class="flex min-w-0 items-center gap-2.5">
 									{#if getFlagUrl(teamB)}
-										<img src={getFlagUrl(teamB, 48)} alt="" class="h-7 w-10 rounded object-cover shadow-sm" />
+										<img src={getFlagUrl(teamB, 48)} alt="" class="h-7 w-10 shrink-0 rounded object-cover shadow-sm {slotEval.missedB ? 'opacity-40 grayscale' : ''}" />
 									{/if}
-									<div>
-										<span class="text-sm font-bold text-slate-800">{teamB}</span>
-										{#if slot?.autoB}
+									<div class="min-w-0">
+										<span class="text-sm font-bold {slotEval.missedB ? 'text-slate-400 line-through' : 'text-slate-800'}">{teamB}</span>
+										{#if slotEval.missedB}
+											<span class="ml-1.5 inline-flex items-center gap-1 rounded bg-slate-200 px-1.5 py-0.5 text-[8px] font-bold text-slate-600">
+												{#if getFlagUrl(slotEval.realB)}<img src={getFlagUrl(slotEval.realB, 20)} alt="" class="h-2.5 w-3.5 rounded-sm object-cover" />{/if}
+												Clasificó: {slotEval.realB}
+											</span>
+										{:else if slotEval.correctB}
+											<span class="ml-1.5 rounded bg-emerald-100 px-1 py-0.5 text-[8px] font-bold text-emerald-700">✓ Acertaste</span>
+										{:else if slot?.autoB}
 											<span class="ml-1.5 rounded bg-sky-100 px-1 py-0.5 text-[8px] font-bold text-sky-600">AUTO</span>
 										{/if}
 									</div>
 								</div>
-								{#if matchCanEdit}
+								{#if canEnterResult}
 									<input
 										type="number"
 										min="0"
@@ -837,17 +881,17 @@
 										focus:border-amber-400 focus:ring-2 focus:ring-amber-400/30"
 									/>
 								{:else}
-									<span class="flex h-10 w-12 items-center justify-center rounded-lg border-2 border-slate-200 bg-slate-50 text-base font-black text-slate-800">
+									<span class="flex h-10 w-12 items-center justify-center rounded-lg border-2 text-base font-black {slotEval.missedB ? 'border-slate-100 bg-slate-50 text-slate-300' : 'border-slate-200 bg-slate-50 text-slate-800'}">
 										{pred.predB ?? '-'}
 									</span>
 								{/if}
 							</div>
 
 							<!-- Penalty selector (shows when draw in knockout) -->
-							{#if needsPenalty(match.id, stage)}
+							{#if needsPenalty(match.id, stage) && !slotEval.cannotCompete}
 								<div class="overflow-hidden rounded-xl border border-amber-200 bg-amber-50 p-3">
 									<p class="mb-2 text-xs font-bold text-amber-700">⚡ Empate — ¿Quién gana por penales?</p>
-									{#if matchCanEdit}
+									{#if canEnterResult}
 										<div class="grid grid-cols-2 gap-2">
 											<button
 												onclick={() => { updatePenalty(match.id, 'A'); autoSave(match.id); }}

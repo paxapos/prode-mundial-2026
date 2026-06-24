@@ -299,6 +299,15 @@ export interface KnockoutSlotEvaluation {
 	missedA: boolean;
 	/** El usuario falló el lado B: el real ya está definido y no coincide con su pronóstico. */
 	missedB: boolean;
+	/** El usuario acertó el lado A: el real ya está definido y coincide con su pronóstico. */
+	correctA: boolean;
+	/** El usuario acertó el lado B: el real ya está definido y coincide con su pronóstico. */
+	correctB: boolean;
+	/**
+	 * Falló los dos equipos: la llave "se muere", es imposible sumar puntos en este partido.
+	 * Ambos cruces reales ya están definidos y ninguno coincide con el pronóstico.
+	 */
+	bothMissed: boolean;
 	/**
 	 * El usuario no tiene los equipos reales de esta llave, así que no puede competir por el
 	 * resultado del partido (no sumaría puntos de resultado/exacto). Sólo es true cuando el
@@ -336,6 +345,9 @@ export function evaluateKnockoutSlot(
 		realBKnown,
 		missedA,
 		missedB,
+		correctA: realAKnown && !missedA,
+		correctB: realBKnown && !missedB,
+		bothMissed: missedA && missedB,
 		cannotCompete: missedA || missedB
 	};
 }

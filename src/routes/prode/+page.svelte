@@ -492,12 +492,14 @@ import type { Match } from '$lib/types';
 					{@const isFinalMatch = match.id === 'final'}
 					{@const is3rd = match.id === '3rd'}
 					<div
-						class="card-3d overflow-hidden rounded-2xl border shadow-lg transition-all duration-300
+						class="card-3d overflow-hidden rounded-2xl border shadow-lg transition-all duration-300 {slotEval.bothMissed ? 'opacity-70' : ''}
 						{isFinalMatch
 							? 'border-amber-300 bg-gradient-to-br from-amber-50 to-white ring-2 ring-amber-200'
 							: is3rd
 								? 'border-orange-200 bg-gradient-to-br from-orange-50 to-white'
-								: 'border-slate-200 bg-white hover:shadow-xl'}"
+								: slotEval.bothMissed
+									? 'border-slate-300 bg-slate-50'
+									: 'border-slate-200 bg-white hover:shadow-xl'}"
 					>
 						<!-- Match header -->
 						<div class="flex items-center justify-between px-4 py-2.5 {isFinalMatch ? 'bg-amber-100/60' : is3rd ? 'bg-orange-100/60' : 'bg-slate-50'}">
@@ -535,11 +537,18 @@ import type { Match } from '$lib/types';
 
 						<div class="space-y-3 p-4">
 							<!-- Bracket fallado: el usuario no tiene los equipos reales de esta llave -->
-							{#if slotEval.cannotCompete}
-								<div class="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+							{#if slotEval.bothMissed}
+								<div class="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2">
+									<span class="text-sm leading-none">💀</span>
+									<p class="text-[11px] font-bold leading-tight text-rose-600">
+										Llave perdida: fallaste los dos equipos de este cruce. Es imposible sumar puntos en este partido.
+									</p>
+								</div>
+							{:else if slotEval.cannotCompete}
+								<div class="flex items-start gap-2 rounded-xl border border-slate-300 bg-slate-100 px-3 py-2">
 									<span class="text-sm leading-none">🔒</span>
 									<p class="text-[11px] font-semibold leading-tight text-slate-500">
-										No acertaste el cruce: no tenés los equipos que clasificaron a esta llave, así que no podés competir por el resultado de este partido.
+										No tenés los dos equipos que clasificaron a esta llave: no podés competir por el resultado de este partido.
 									</p>
 								</div>
 							{/if}
@@ -557,6 +566,8 @@ import type { Match } from '$lib/types';
 												{#if getFlagUrl(slotEval.realA)}<img src={getFlagUrl(slotEval.realA, 20)} alt="" class="h-2.5 w-3.5 rounded-sm object-cover" />{/if}
 												Clasificó: {slotEval.realA}
 											</span>
+										{:else if slotEval.correctA}
+											<span class="ml-1.5 rounded bg-emerald-100 px-1 py-0.5 text-[8px] font-bold text-emerald-700">✓ Acertaste</span>
 										{:else if slot?.autoA}
 											<span class="ml-1.5 rounded bg-sky-100 px-1 py-0.5 text-[8px] font-bold text-sky-600">AUTO</span>
 										{/if}
@@ -600,6 +611,8 @@ import type { Match } from '$lib/types';
 												{#if getFlagUrl(slotEval.realB)}<img src={getFlagUrl(slotEval.realB, 20)} alt="" class="h-2.5 w-3.5 rounded-sm object-cover" />{/if}
 												Clasificó: {slotEval.realB}
 											</span>
+										{:else if slotEval.correctB}
+											<span class="ml-1.5 rounded bg-emerald-100 px-1 py-0.5 text-[8px] font-bold text-emerald-700">✓ Acertaste</span>
 										{:else if slot?.autoB}
 											<span class="ml-1.5 rounded bg-sky-100 px-1 py-0.5 text-[8px] font-bold text-sky-600">AUTO</span>
 										{/if}

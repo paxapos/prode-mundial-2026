@@ -78,6 +78,29 @@ import type { Match } from '$lib/types';
 		const b = sideAccuracy(match.teamB, slot?.teamB, !!slot?.autoB);
 		return { a, b, dead: a === 'miss' && b === 'miss', realA: match.teamA, realB: match.teamB };
 	}
+
+	// Resumen de aciertos de las llaves de 16avos (16 cruces, 32 clasificados).
+	const bracketSummary = $derived.by(() => {
+		const r32 = data.matches.filter((m) => m.stage === 'round32');
+		let slotsDecided = 0;
+		let slotsHit = 0;
+		let crossesDecided = 0;
+		let crossesPerfect = 0;
+		let dead = 0;
+		for (const m of r32) {
+			const acc = bracketAccuracy(m, bracket[m.id]);
+			const aDecided = acc.a !== 'pending';
+			const bDecided = acc.b !== 'pending';
+			if (aDecided) { slotsDecided++; if (acc.a === 'hit') slotsHit++; }
+			if (bDecided) { slotsDecided++; if (acc.b === 'hit') slotsHit++; }
+			if (aDecided && bDecided) {
+				crossesDecided++;
+				if (acc.a === 'hit' && acc.b === 'hit') crossesPerfect++;
+				if (acc.dead) dead++;
+			}
+		}
+		return { total: r32.length, slotsDecided, slotsHit, crossesDecided, crossesPerfect, dead };
+	});
 	/* ─── Ranking de mejores terceros (los 8 mejores clasifican) ─── */
 	const THIRDS_ADVANCE = 8;
 	const thirdPlaceRank = $derived.by(() => {
@@ -300,6 +323,33 @@ import type { Match } from '$lib/types';
 					</div>
 				{/if}
 			</div>
+		</div>
+	{/if}
+
+	<!-- ═══ BRACKET ACCURACY SUMMARY (16avos) ═══ -->
+	{#if bracketSummary.slotsDecided > 0}
+		<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+			<div class="mb-3 flex items-center gap-2">
+				<span class="text-lg">🏟️</span>
+				<h2 class="text-sm font-black uppercase tracking-wide text-slate-700">Tus aciertos en 16avos</h2>
+			</div>
+			<div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+				<div class="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 text-center">
+					<p class="text-2xl font-black text-emerald-700">{bracketSummary.slotsHit}<span class="text-base text-emerald-500">/{bracketSummary.slotsDecided}</span></p>
+					<p class="mt-0.5 text-[11px] font-semibold text-slate-500">Clasificados acertados</p>
+				</div>
+				<div class="rounded-xl border border-sky-100 bg-sky-50/60 p-3 text-center">
+					<p class="text-2xl font-black text-sky-700">{bracketSummary.crossesPerfect}<span class="text-base text-sky-500">/{bracketSummary.total}</span></p>
+					<p class="mt-0.5 text-[11px] font-semibold text-slate-500">Cruces completos</p>
+				</div>
+				<div class="col-span-2 rounded-xl border p-3 text-center sm:col-span-1 {bracketSummary.dead > 0 ? 'border-rose-200 bg-rose-50/70' : 'border-slate-100 bg-slate-50/60'}">
+					<p class="text-2xl font-black {bracketSummary.dead > 0 ? 'text-rose-600' : 'text-slate-400'}">{bracketSummary.dead > 0 ? '💀 ' : ''}{bracketSummary.dead}</p>
+					<p class="mt-0.5 text-[11px] font-semibold text-slate-500">Llaves muertas</p>
+				</div>
+			</div>
+			{#if bracketSummary.crossesDecided < bracketSummary.total}
+				<p class="mt-3 text-[11px] text-slate-400">Se va completando a medida que se cierran los grupos y se definen los cruces reales.</p>
+			{/if}
 		</div>
 	{/if}
 

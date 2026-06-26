@@ -958,6 +958,60 @@ export async function listTournamentTeamNames(tournamentId: string): Promise<str
 	return tournamentTeamNamesFromMatches(await listMatches(tournamentId));
 }
 
+/**
+ * Resuelve, de forma progresiva, qué equipo real entra en cada casillero de 16avos
+ * a medida que cada grupo cierra — sin esperar a que termine toda la fase de grupos.
+ *
+ * A diferencia de la sincronización del bracket (que recién corre con todos los grupos
+ * completos), acá un casillero de 1°/2° se resuelve apenas su grupo jugó sus 6 partidos
+ * y la posición no quedó empatada (mismo criterio FIFA + desempate manual del admin).
+ * Los 8 mejores terceros sólo se resuelven cuando el corte 8°/9° está definido, porque
+ * dependen de todos los grupos.
+ *
+ * Devuelve `{ matchId: { A?, B? } }` con los lados ya definidos. Se usa en "Mi Prode"
+ * para mostrar aciertos/llaves muertas sin que cambie el cálculo oficial de puntos.
+ */
+export async function getProgressiveR32Classifiers(
+	tournamentId: string
+): Promise<Record<string, { A?: string; B?: string }>> {
+	const sourceId = await getSourceTournamentId(tournamentId);
+	const matches = await listMatches(sourceId);
+	const standings = await buildGroupStandings(sourceId);
+	const result: Record<string, { A?: string; B?: string }> = {};
+
+	const groupFullyPlayed = (group: string): boolean => {
+		const groupMatches = matches.filter((m) => m.stage === 'groups' && m.groupCode === group);
+		return groupMatches.length > 0 && groupMatches.every((m) => m.scoreA !== null && m.scoreB !== null);
+	};
+
+	const positionTeam = (group: string, position: number): string | null => {
+		if (!groupFullyPlayed(group)) return null;
+		if (!isGroupPositionResolved(standings, matches, group, position)) return null;
+		return teamAt(standings, group, position);
+	};
+
+	for (const [matchId, def] of Object.entries(R32_DEFS)) {
+		const entry: { A?: string; B?: string } = {};
+		const teamA = positionTeam(def.aGroup, def.aPos);
+		if (teamA) entry.A = teamA;
+		if (def.bGroup !== undefined && def.bPos !== undefined) {
+			const teamB = positionTeam(def.bGroup, def.bPos);
+			if (teamB) entry.B = teamB;
+		}
+		if (entry.A || entry.B) result[matchId] = entry;
+	}
+
+	// Los terceros dependen del corte global 8°/9°; sólo se resuelven cuando está definido.
+	if (isBestThirdCutoffResolved(standings)) {
+		for (const [matchId, group] of resolveBestThirds(standings)) {
+			const team = positionTeam(group, 2);
+			if (team) result[matchId] = { ...(result[matchId] ?? {}), B: team };
+		}
+	}
+
+	return result;
+}
+
 export async function listPredictionsForUser(userId: string, tournamentId: string): Promise<Prediction[]> {
 	// Predictions are always stored against the source tournament
 	const tournament = await getTournamentById(tournamentId);

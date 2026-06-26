@@ -4,6 +4,8 @@ import type { SideWinner } from '$lib/types';
 import {
 	getPlayerMatchDetails,
 	getPlayerGroupStageDetails,
+	getProgressiveR32Classifiers,
+	getRealEliminatedTeams,
 	getTournamentByAlias,
 	getTournamentSettings,
 	getUserByNickname,
@@ -49,6 +51,8 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 		groupStageDetails: canViewPredictions
 			? await getPlayerGroupStageDetails(profileUser.id, tournament.id)
 			: { totalPoints: 0, details: [] },
+		progressiveR32: await getProgressiveR32Classifiers(tournament.id),
+		eliminatedTeams: await getRealEliminatedTeams(tournament.id),
 		canEdit,
 		canEditPredictions,
 		isOwner,

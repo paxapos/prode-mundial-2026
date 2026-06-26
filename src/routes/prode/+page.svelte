@@ -79,14 +79,19 @@ import type { Match } from '$lib/types';
 		return set;
 	});
 
+	// Equipos que ya quedaron eliminados de la realidad: no pueden ocupar ningún casillero
+	// de ahí en adelante, así que si los pronostiqué quedan en gris en todas las fases.
+	const eliminatedSet = $derived(new Set((data.eliminatedTeams ?? []).map((t: string) => getTeamId(t))));
+
 	type SideAccuracy = 'pending' | 'hit' | 'miss';
 	interface BracketAccuracy {
 		a: SideAccuracy;
 		b: SideAccuracy;
 		/** Ambos casilleros resueltos y ambos errados → llave muerta (sin chances de sumar). */
 		dead: boolean;
-		realA: string;
-		realB: string;
+		/** Nombre del equipo real que pasó, si ya se conoce ese casillero. */
+		realA?: string;
+		realB?: string;
 	}
 
 	// Equipo real ya definido para cada lado del cruce.
@@ -101,19 +106,21 @@ import type { Match } from '$lib/types';
 		return out;
 	}
 
-	// Un casillero solo se evalúa cuando el equipo real ya está definido y el pronóstico
-	// del usuario resolvió ese lado. Si todavía hay dudas, queda 'pending' (no se marca).
+	// Un casillero se marca cuando: (a) ya se conoce el equipo real de ese lado, o
+	// (b) el equipo que pronostiqué quedó eliminado y no puede llegar acá de ningún modo.
+	// Si todavía hay dudas, queda 'pending' (no se marca).
 	function sideAccuracy(realTeam: string | undefined, predTeam: string | undefined, predResolved: boolean): SideAccuracy {
 		if (!predResolved || !predTeam) return 'pending';
-		if (!realTeam) return 'pending';
-		return getTeamId(predTeam) === getTeamId(realTeam) ? 'hit' : 'miss';
+		if (realTeam) return getTeamId(predTeam) === getTeamId(realTeam) ? 'hit' : 'miss';
+		if (eliminatedSet.has(getTeamId(predTeam))) return 'miss';
+		return 'pending';
 	}
 
 	function bracketAccuracy(match: Match, slot: BracketSlot | undefined): BracketAccuracy {
 		const real = realSlot(match);
 		const a = sideAccuracy(real.A, slot?.teamA, !!slot?.autoA);
 		const b = sideAccuracy(real.B, slot?.teamB, !!slot?.autoB);
-		return { a, b, dead: a === 'miss' && b === 'miss', realA: real.A ?? match.teamA, realB: real.B ?? match.teamB };
+		return { a, b, dead: a === 'miss' && b === 'miss', realA: real.A, realB: real.B };
 	}
 
 	// Resumen de aciertos de las llaves de 16avos (16 cruces, 32 clasificados).
@@ -691,7 +698,7 @@ import type { Match } from '$lib/types';
 											{/if}
 										</div>
 										{#if acc.a === 'miss'}
-											<p class="mt-0.5 text-[10px] font-semibold text-slate-500">Pasó: {acc.realA}</p>
+											<p class="mt-0.5 text-[10px] font-semibold text-slate-500">{acc.realA ? `Pasó: ${acc.realA}` : 'Eliminado — no llega a esta fase'}</p>
 										{/if}
 									</div>
 								</div>
@@ -739,7 +746,7 @@ import type { Match } from '$lib/types';
 											{/if}
 										</div>
 										{#if acc.b === 'miss'}
-											<p class="mt-0.5 text-[10px] font-semibold text-slate-500">Pasó: {acc.realB}</p>
+											<p class="mt-0.5 text-[10px] font-semibold text-slate-500">{acc.realB ? `Pasó: ${acc.realB}` : 'Eliminado — no llega a esta fase'}</p>
 										{/if}
 									</div>
 								</div>

@@ -1012,6 +1012,54 @@ export async function getProgressiveR32Classifiers(
 	return result;
 }
 
+/**
+ * Equipos que YA quedaron eliminados de forma definitiva en la realidad. Un equipo
+ * eliminado no puede ocupar ningún casillero del bracket de ahí en adelante, así que
+ * "Mi Prode" lo muestra en gris en todas las fases siguientes (no sólo donde erró el cruce).
+ *
+ * Se considera eliminado:
+ * - El 4° de un grupo ya jugado y con la posición resuelta (sin empate en el corte 3°/4°).
+ * - Los 4 peores terceros, una vez definido el corte global 8°/9°.
+ * - El perdedor de cualquier cruce de eliminación directa ya jugado.
+ */
+export async function getRealEliminatedTeams(tournamentId: string): Promise<string[]> {
+	const sourceId = await getSourceTournamentId(tournamentId);
+	const matches = await listMatches(sourceId);
+	const standings = await buildGroupStandings(sourceId);
+	const eliminated = new Set<string>();
+
+	const groupFullyPlayed = (group: string): boolean => {
+		const groupMatches = matches.filter((m) => m.stage === 'groups' && m.groupCode === group);
+		return groupMatches.length > 0 && groupMatches.every((m) => m.scoreA !== null && m.scoreB !== null);
+	};
+
+	// 4° de cada grupo terminado (con el corte 3°/4° resuelto).
+	for (const [group, rows] of Object.entries(standings)) {
+		if (!groupFullyPlayed(group) || !rows || rows.length < 4) continue;
+		if (!isGroupPositionResolved(standings, matches, group, 3)) continue;
+		const fourth = rows[3]?.team;
+		if (fourth) eliminated.add(getTeamId(fourth));
+	}
+
+	// Los 4 peores terceros, cuando el corte 8°/9° quedó definido.
+	if (isBestThirdCutoffResolved(standings)) {
+		const thirds = rankThirdPlacedGroups(standings);
+		for (let i = 8; i < thirds.length; i += 1) {
+			const team = thirds[i]?.row?.team;
+			if (team) eliminated.add(getTeamId(team));
+		}
+	}
+
+	// Perdedores de cruces de eliminación directa ya jugados.
+	for (const m of matches) {
+		if (m.stage === 'groups' || m.scoreA === null || m.scoreB === null) continue;
+		const { loser } = resolveWinner(m.teamA, m.teamB, m.scoreA, m.scoreB, m.penaltyWinner);
+		if (loser) eliminated.add(getTeamId(loser));
+	}
+
+	return [...eliminated];
+}
+
 export async function listPredictionsForUser(userId: string, tournamentId: string): Promise<Prediction[]> {
 	// Predictions are always stored against the source tournament
 	const tournament = await getTournamentById(tournamentId);

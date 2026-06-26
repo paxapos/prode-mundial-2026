@@ -3,7 +3,6 @@
 	import { Badge, Button } from 'flowbite-svelte';
 	import { page, navigating } from '$app/stores';
 	import favicon from '$lib/assets/favicon.svg';
-	import YouTubeModal from '$lib/components/YouTubeModal.svelte';
 	import { getFlagUrl, VENUES } from '$lib/teams';
 	import { formatMatchDate as formatDate, formatMatchTime as formatTime } from '$lib/match-datetime';
 
@@ -129,8 +128,6 @@
 	</div>
 {/if}
 
-<YouTubeModal />
-
 <div class="mx-auto min-h-screen max-w-6xl px-4 pb-10 pt-6 md:px-6">
 	<!-- ═══ STICKY NAV ═══ -->
 	<header class="sticky top-3 z-30 mb-8 rounded-2xl border border-slate-200/70 bg-white/85 px-4 py-3 shadow-sm backdrop-blur md:px-6">
@@ -153,6 +150,7 @@
 					<a href="/prode" class="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100">Mi Prode</a>
 				{/if}
 				<a href="/estadisticas" class="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100">Estadísticas</a>
+				<a href="/blog" class="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100">Blog</a>
 				{#if data.user?.role === 'admin'}
 					<a href="/admin" class="rounded-lg px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100">Admin</a>
 				{/if}
@@ -254,6 +252,10 @@
 
 						<a href="/estadisticas" onclick={closeMenu} class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100">
 							<span class="text-lg">📊</span> Estadísticas
+						</a>
+
+						<a href="/blog" onclick={closeMenu} class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-100">
+							<span class="text-lg">📰</span> Blog
 						</a>
 
 						{#if data.user?.role === 'admin'}

@@ -3,7 +3,7 @@
 	import { deserialize } from '$app/forms';
 	import { Badge } from 'flowbite-svelte';
 	import { getFlagUrl, GROUPS, VENUES, getTeamId } from '$lib/teams';
-	import { calcStandings, buildBracket, type LivePred, type BracketSlot } from '$lib/bracket-engine';
+	import { calcStandings, buildBracket, calcGroupPositionAccuracy, type LivePred, type BracketSlot } from '$lib/bracket-engine';
 	import { rankThirdPlacedGroups } from '$lib/bracket-rules';
 	import { formatMatchDate as formatDateShort, formatMatchTime as formatTime } from '$lib/match-datetime';
 	import { STAGE_LABELS } from '$lib/scoring-config';
@@ -43,6 +43,30 @@ import type { Match } from '$lib/types';
 	const standings = $derived(calcStandings(groupMatches, preds));
 	const bracket = $derived(buildBracket(data.matches, preds));
 
+	/* ─── Acierto de posiciones de grupos (pronóstico vs. realidad) ─── */
+	const groupAccuracy = $derived(calcGroupPositionAccuracy(groupMatches, preds));
+	const accuracyBanner = $derived.by(() => {
+		const pct = groupAccuracy.pct;
+		if (pct === null) return null; // todavía no hay grupos definidos para comparar
+		const head = `Llevás ${pct}% de acierto en posiciones de grupos`;
+		let mood: string;
+		let tone: { wrap: string; emoji: string; pct: string };
+		if (pct >= 75) {
+			mood = '¡VAS MUY BIEN! En la fase de llaves la rompés 🔥';
+			tone = { wrap: 'border-emerald-300 bg-gradient-to-r from-emerald-50 to-teal-50', emoji: '🏆', pct: 'bg-emerald-500' };
+		} else if (pct >= 50) {
+			mood = 'Vas bien encaminado, seguí así 💪';
+			tone = { wrap: 'border-sky-300 bg-gradient-to-r from-sky-50 to-cyan-50', emoji: '🎯', pct: 'bg-sky-500' };
+		} else if (pct >= 25) {
+			mood = 'Hay margen para mejorar, todavía estás a tiempo 👀';
+			tone = { wrap: 'border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50', emoji: '⚠️', pct: 'bg-amber-500' };
+		} else {
+			mood = 'A remontar, que las llaves dan muchos puntos 🥶';
+			tone = { wrap: 'border-rose-300 bg-gradient-to-r from-rose-50 to-red-50', emoji: '📉', pct: 'bg-rose-500' };
+		}
+		return { pct, head, mood, tone, decidedGroups: groupAccuracy.decidedGroups };
+	});
+
 	/* ─── Aciertos del bracket (pronóstico vs. equipos reales) ─── */
 	// Set de ids de los 48 equipos reales (los que aparecen en partidos de grupos).
 	const realTeamIds = $derived.by(() => {
@@ -65,18 +89,31 @@ import type { Match } from '$lib/types';
 		realB: string;
 	}
 
-	// Un casillero solo se evalúa cuando el equipo real ya está definido (sincronizado al
-	// cerrarse la fase de grupos) y el pronóstico del usuario resolvió ese lado.
-	function sideAccuracy(realTeam: string, predTeam: string | undefined, predResolved: boolean): SideAccuracy {
+	// Equipo real ya definido para cada lado del cruce.
+	// 16avos: resolución progresiva del servidor (apenas cierra cada grupo, con desempates).
+	// Rondas siguientes: el equipo real surge del resultado del cruce previo, ya reflejado
+	// en match.teamA/teamB una vez jugado ese partido.
+	function realSlot(match: Match): { A?: string; B?: string } {
+		if (match.stage === 'round32') return data.progressiveR32?.[match.id] ?? {};
+		const out: { A?: string; B?: string } = {};
+		if (realTeamIds.has(getTeamId(match.teamA))) out.A = match.teamA;
+		if (realTeamIds.has(getTeamId(match.teamB))) out.B = match.teamB;
+		return out;
+	}
+
+	// Un casillero solo se evalúa cuando el equipo real ya está definido y el pronóstico
+	// del usuario resolvió ese lado. Si todavía hay dudas, queda 'pending' (no se marca).
+	function sideAccuracy(realTeam: string | undefined, predTeam: string | undefined, predResolved: boolean): SideAccuracy {
 		if (!predResolved || !predTeam) return 'pending';
-		if (!realTeamIds.has(getTeamId(realTeam))) return 'pending';
+		if (!realTeam) return 'pending';
 		return getTeamId(predTeam) === getTeamId(realTeam) ? 'hit' : 'miss';
 	}
 
 	function bracketAccuracy(match: Match, slot: BracketSlot | undefined): BracketAccuracy {
-		const a = sideAccuracy(match.teamA, slot?.teamA, !!slot?.autoA);
-		const b = sideAccuracy(match.teamB, slot?.teamB, !!slot?.autoB);
-		return { a, b, dead: a === 'miss' && b === 'miss', realA: match.teamA, realB: match.teamB };
+		const real = realSlot(match);
+		const a = sideAccuracy(real.A, slot?.teamA, !!slot?.autoA);
+		const b = sideAccuracy(real.B, slot?.teamB, !!slot?.autoB);
+		return { a, b, dead: a === 'miss' && b === 'miss', realA: real.A ?? match.teamA, realB: real.B ?? match.teamB };
 	}
 
 	// Resumen de aciertos de las llaves de 16avos (16 cruces, 32 clasificados).
@@ -380,6 +417,23 @@ import type { Match } from '$lib/types';
 
 	<!-- ═══ GROUPS ═══ -->
 	{#if activeTab === 'groups'}
+		<!-- Acierto de posiciones de grupos vs. la tabla real -->
+		{#if accuracyBanner}
+			<div class="mb-6 flex items-center gap-4 rounded-2xl border {accuracyBanner.tone.wrap} p-4 shadow-sm">
+				<div class="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl {accuracyBanner.tone.pct} text-xl font-black text-white shadow-md">
+					{accuracyBanner.pct}%
+				</div>
+				<div class="min-w-0 flex-1">
+					<p class="text-sm font-black text-slate-800 sm:text-base">{accuracyBanner.tone.emoji} {accuracyBanner.head}</p>
+					<p class="mt-0.5 text-xs font-semibold text-slate-600 sm:text-sm">{accuracyBanner.mood}</p>
+					<p class="mt-1 text-[11px] text-slate-400">
+						Comparado con la tabla real · {accuracyBanner.decidedGroups}
+						{accuracyBanner.decidedGroups === 1 ? 'grupo definido' : 'grupos definidos'}
+					</p>
+				</div>
+			</div>
+		{/if}
+
 		<div class="grid gap-6 lg:grid-cols-2">
 			{#each GROUPS as group}
 				{@const gc = GC[group] ?? GC.A}

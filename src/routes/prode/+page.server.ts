@@ -5,6 +5,7 @@ import {
 	canUserEditPredictions,
 	getActiveTournament,
 	getPlayerMatchDetails,
+	getProgressiveR32Classifiers,
 	getTournamentSettings,
 	listLigas,
 	listMatches,
@@ -45,7 +46,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		predictions: await listPredictionsForUser(locals.user.id, source.id),
 		settings: await getTournamentSettings(source.id),
 		matchDetails: await getPlayerMatchDetails(locals.user.id, source.id),
-		canEditPredictions: await canUserEditPredictions(locals.user.id, source.id)
+		canEditPredictions: await canUserEditPredictions(locals.user.id, source.id),
+		progressiveR32: await getProgressiveR32Classifiers(source.id)
 	};
 };
 

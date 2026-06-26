@@ -4,8 +4,8 @@
 	import { page } from '$app/stores';
 	import { Badge } from 'flowbite-svelte';
 	const ogImage = $derived(`${$page.url.origin}/og-image.jpg`);
-	import { getFlagUrl, GROUPS, VENUES } from '$lib/teams';
-	import { calcStandings, buildBracket, calcGroupPositionAccuracy, type LivePred } from '$lib/bracket-engine';
+	import { getFlagUrl, GROUPS, VENUES, getTeamId } from '$lib/teams';
+	import { calcStandings, buildBracket, calcGroupPositionAccuracy, type LivePred, type BracketSlot } from '$lib/bracket-engine';
 	import { rankThirdPlacedGroups } from '$lib/bracket-rules';
 	import { formatMatchDate as formatDateShort, formatMatchTime as formatTime } from '$lib/match-datetime';
 	import { STAGE_LABELS } from '$lib/scoring-config';
@@ -46,6 +46,74 @@
 	const groupMatches = $derived(data.matches.filter((m: Match) => m.stage === 'groups'));
 	const standings = $derived(calcStandings(groupMatches, preds));
 	const bracket = $derived(buildBracket(data.matches, preds));
+
+	/* ─── Aciertos del bracket (pronóstico vs. equipos reales) ─── */
+	const realTeamIds = $derived.by(() => {
+		const set = new Set<string>();
+		for (const m of data.matches) {
+			if (m.stage !== 'groups') continue;
+			set.add(getTeamId(m.teamA));
+			set.add(getTeamId(m.teamB));
+		}
+		return set;
+	});
+	// Equipos eliminados de la realidad: no pueden ocupar ningún casillero futuro.
+	const eliminatedSet = $derived(new Set((data.eliminatedTeams ?? []).map((t: string) => getTeamId(t))));
+
+	type SideAccuracy = 'pending' | 'hit' | 'miss';
+	interface BracketAccuracy {
+		a: SideAccuracy;
+		b: SideAccuracy;
+		dead: boolean;
+		realA?: string;
+		realB?: string;
+	}
+
+	function realSlot(match: Match): { A?: string; B?: string } {
+		if (match.stage === 'round32') return data.progressiveR32?.[match.id] ?? {};
+		const out: { A?: string; B?: string } = {};
+		if (realTeamIds.has(getTeamId(match.teamA))) out.A = match.teamA;
+		if (realTeamIds.has(getTeamId(match.teamB))) out.B = match.teamB;
+		return out;
+	}
+
+	function sideAccuracy(realTeam: string | undefined, predTeam: string | undefined, predResolved: boolean): SideAccuracy {
+		if (!predResolved || !predTeam) return 'pending';
+		if (realTeam) return getTeamId(predTeam) === getTeamId(realTeam) ? 'hit' : 'miss';
+		if (eliminatedSet.has(getTeamId(predTeam))) return 'miss';
+		return 'pending';
+	}
+
+	function bracketAccuracy(match: Match, slot: BracketSlot | undefined): BracketAccuracy {
+		const real = realSlot(match);
+		const a = sideAccuracy(real.A, slot?.teamA, !!slot?.autoA);
+		const b = sideAccuracy(real.B, slot?.teamB, !!slot?.autoB);
+		return { a, b, dead: a === 'miss' && b === 'miss', realA: real.A, realB: real.B };
+	}
+
+	// Resumen de aciertos de las llaves de 16avos (16 cruces, 32 clasificados).
+	const bracketSummary = $derived.by(() => {
+		const r32 = data.matches.filter((m: Match) => m.stage === 'round32');
+		let slotsDecided = 0;
+		let slotsHit = 0;
+		let crossesPerfect = 0;
+		let crossesDecided = 0;
+		let dead = 0;
+		for (const m of r32) {
+			const acc = bracketAccuracy(m, bracket[m.id]);
+			const aDecided = acc.a !== 'pending';
+			const bDecided = acc.b !== 'pending';
+			if (aDecided) { slotsDecided++; if (acc.a === 'hit') slotsHit++; }
+			if (bDecided) { slotsDecided++; if (acc.b === 'hit') slotsHit++; }
+			if (aDecided && bDecided) {
+				crossesDecided++;
+				if (acc.a === 'hit' && acc.b === 'hit') crossesPerfect++;
+				if (acc.dead) dead++;
+			}
+		}
+		return { total: r32.length, slotsDecided, slotsHit, crossesPerfect, crossesDecided, dead };
+	});
+	const accuracyOwnerLabel = $derived(data.isOwner ? 'Tus' : `${data.profileUser.nickname}:`);
 
 	/* ─── Acierto de posiciones de grupos (pronóstico vs. realidad) ─── */
 	const groupAccuracy = $derived(calcGroupPositionAccuracy(groupMatches, preds));
@@ -493,6 +561,33 @@
 		</div>
 	{/if}
 
+	<!-- ═══ BRACKET ACCURACY SUMMARY (16avos) ═══ -->
+	{#if bracketSummary.slotsDecided > 0}
+		<div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+			<div class="mb-3 flex items-center gap-2">
+				<span class="text-lg">🏟️</span>
+				<h2 class="text-sm font-black uppercase tracking-wide text-slate-700">{accuracyOwnerLabel} aciertos en 16avos</h2>
+			</div>
+			<div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+				<div class="rounded-xl border border-emerald-100 bg-emerald-50/60 p-3 text-center">
+					<p class="text-2xl font-black text-emerald-700">{bracketSummary.slotsHit}<span class="text-base text-emerald-500">/{bracketSummary.slotsDecided}</span></p>
+					<p class="mt-0.5 text-[11px] font-semibold text-slate-500">Clasificados acertados</p>
+				</div>
+				<div class="rounded-xl border border-sky-100 bg-sky-50/60 p-3 text-center">
+					<p class="text-2xl font-black text-sky-700">{bracketSummary.crossesPerfect}<span class="text-base text-sky-500">/{bracketSummary.total}</span></p>
+					<p class="mt-0.5 text-[11px] font-semibold text-slate-500">Cruces completos</p>
+				</div>
+				<div class="col-span-2 rounded-xl border p-3 text-center sm:col-span-1 {bracketSummary.dead > 0 ? 'border-rose-200 bg-rose-50/70' : 'border-slate-100 bg-slate-50/60'}">
+					<p class="text-2xl font-black {bracketSummary.dead > 0 ? 'text-rose-600' : 'text-slate-400'}">{bracketSummary.dead > 0 ? '💀 ' : ''}{bracketSummary.dead}</p>
+					<p class="mt-0.5 text-[11px] font-semibold text-slate-500">Llaves muertas</p>
+				</div>
+			</div>
+			{#if bracketSummary.crossesDecided < bracketSummary.total}
+				<p class="mt-3 text-[11px] text-slate-400">Se va completando a medida que se cierran los grupos y se definen los cruces reales.</p>
+			{/if}
+		</div>
+	{/if}
+
 	<!-- ═══ TAB BAR ═══ -->
 	<div class="sticky top-[4.5rem] z-10 -mx-1 overflow-x-auto rounded-xl border border-slate-200/80 bg-white/90 px-1 py-1.5 shadow-sm backdrop-blur">
 		<div class="flex gap-1">
@@ -729,14 +824,23 @@
 					{@const matchCanEdit = canEditMatch(match)}
 					{@const isFinalMatch = match.id === 'final'}
 					{@const is3rd = match.id === '3rd'}
+					{@const acc = bracketAccuracy(match, slot)}
 					<div
 						class="card-3d overflow-hidden rounded-2xl border shadow-lg transition-all duration-300
-						{isFinalMatch
-							? 'border-amber-300 bg-gradient-to-br from-amber-50 to-white ring-2 ring-amber-200'
-							: is3rd
-								? 'border-orange-200 bg-gradient-to-br from-orange-50 to-white'
-								: 'border-slate-200 bg-white hover:shadow-xl'}"
+						{acc.dead
+							? 'border-rose-300 bg-gradient-to-br from-rose-50 to-white ring-2 ring-rose-300'
+							: isFinalMatch
+								? 'border-amber-300 bg-gradient-to-br from-amber-50 to-white ring-2 ring-amber-200'
+								: is3rd
+									? 'border-orange-200 bg-gradient-to-br from-orange-50 to-white'
+									: 'border-slate-200 bg-white hover:shadow-xl'}"
 					>
+						{#if acc.dead}
+							<div class="flex items-center gap-2 bg-rose-600 px-4 py-2 text-white">
+								<span class="text-base">💀</span>
+								<span class="text-[11px] font-black uppercase tracking-wide">Llave muerta — ningún equipo de este cruce sigue vivo, ya no suma puntos acá</span>
+							</div>
+						{/if}
 						<!-- Match header -->
 						<div class="flex items-center justify-between px-4 py-2.5 {isFinalMatch ? 'bg-amber-100/60' : is3rd ? 'bg-orange-100/60' : 'bg-slate-50'}">
 							<div class="flex flex-wrap items-center gap-2">
@@ -775,15 +879,25 @@
 
 						<div class="space-y-3 p-4">
 							<!-- Team A -->
-							<div class="flex items-center justify-between rounded-xl p-2.5 transition-colors {pred.predA !== null && pred.predB !== null && ((pred.predA > pred.predB) || (pred.predA === pred.predB && pred.predPenaltyWinner === 'A')) ? 'bg-emerald-50 ring-1 ring-emerald-200' : 'bg-slate-50'}">
-								<div class="flex items-center gap-2.5">
+							<div class="flex items-center justify-between rounded-xl p-2.5 transition-colors {acc.a === 'miss' ? 'bg-slate-100/70' : pred.predA !== null && pred.predB !== null && ((pred.predA > pred.predB) || (pred.predA === pred.predB && pred.predPenaltyWinner === 'A')) ? 'bg-emerald-50 ring-1 ring-emerald-200' : 'bg-slate-50'}">
+								<div class="flex items-center gap-2.5 {acc.a === 'miss' ? 'opacity-60' : ''}">
 									{#if getFlagUrl(teamA)}
-										<img src={getFlagUrl(teamA, 48)} alt="" class="h-7 w-10 rounded object-cover shadow-sm" />
+										<img src={getFlagUrl(teamA, 48)} alt="" class="h-7 w-10 rounded object-cover shadow-sm {acc.a === 'miss' ? 'grayscale' : ''}" />
 									{/if}
 									<div>
-										<span class="text-sm font-bold text-slate-800">{teamA}</span>
-										{#if slot?.autoA}
-											<span class="ml-1.5 rounded bg-sky-100 px-1 py-0.5 text-[8px] font-bold text-sky-600">AUTO</span>
+										<div class="flex flex-wrap items-center gap-1.5">
+											<span class="text-sm font-bold {acc.a === 'miss' ? 'text-slate-400 line-through' : 'text-slate-800'}">{teamA}</span>
+											{#if slot?.autoA}
+												<span class="rounded bg-sky-100 px-1 py-0.5 text-[8px] font-bold text-sky-600">AUTO</span>
+											{/if}
+											{#if acc.a === 'hit'}
+												<span class="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[8px] font-black text-emerald-700">✓ acertó</span>
+											{:else if acc.a === 'miss'}
+												<span class="rounded-full bg-rose-100 px-1.5 py-0.5 text-[8px] font-black text-rose-700">✗ no pasó</span>
+											{/if}
+										</div>
+										{#if acc.a === 'miss'}
+											<p class="mt-0.5 text-[10px] font-semibold text-slate-500">{acc.realA ? `Pasó: ${acc.realA}` : 'Eliminado — no llega a esta fase'}</p>
 										{/if}
 									</div>
 								</div>
@@ -813,15 +927,25 @@
 							</div>
 
 							<!-- Team B -->
-							<div class="flex items-center justify-between rounded-xl p-2.5 transition-colors {pred.predA !== null && pred.predB !== null && ((pred.predB > pred.predA) || (pred.predA === pred.predB && pred.predPenaltyWinner === 'B')) ? 'bg-emerald-50 ring-1 ring-emerald-200' : 'bg-slate-50'}">
-								<div class="flex items-center gap-2.5">
+							<div class="flex items-center justify-between rounded-xl p-2.5 transition-colors {acc.b === 'miss' ? 'bg-slate-100/70' : pred.predA !== null && pred.predB !== null && ((pred.predB > pred.predA) || (pred.predA === pred.predB && pred.predPenaltyWinner === 'B')) ? 'bg-emerald-50 ring-1 ring-emerald-200' : 'bg-slate-50'}">
+								<div class="flex items-center gap-2.5 {acc.b === 'miss' ? 'opacity-60' : ''}">
 									{#if getFlagUrl(teamB)}
-										<img src={getFlagUrl(teamB, 48)} alt="" class="h-7 w-10 rounded object-cover shadow-sm" />
+										<img src={getFlagUrl(teamB, 48)} alt="" class="h-7 w-10 rounded object-cover shadow-sm {acc.b === 'miss' ? 'grayscale' : ''}" />
 									{/if}
 									<div>
-										<span class="text-sm font-bold text-slate-800">{teamB}</span>
-										{#if slot?.autoB}
-											<span class="ml-1.5 rounded bg-sky-100 px-1 py-0.5 text-[8px] font-bold text-sky-600">AUTO</span>
+										<div class="flex flex-wrap items-center gap-1.5">
+											<span class="text-sm font-bold {acc.b === 'miss' ? 'text-slate-400 line-through' : 'text-slate-800'}">{teamB}</span>
+											{#if slot?.autoB}
+												<span class="rounded bg-sky-100 px-1 py-0.5 text-[8px] font-bold text-sky-600">AUTO</span>
+											{/if}
+											{#if acc.b === 'hit'}
+												<span class="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[8px] font-black text-emerald-700">✓ acertó</span>
+											{:else if acc.b === 'miss'}
+												<span class="rounded-full bg-rose-100 px-1.5 py-0.5 text-[8px] font-black text-rose-700">✗ no pasó</span>
+											{/if}
+										</div>
+										{#if acc.b === 'miss'}
+											<p class="mt-0.5 text-[10px] font-semibold text-slate-500">{acc.realB ? `Pasó: ${acc.realB}` : 'Eliminado — no llega a esta fase'}</p>
 										{/if}
 									</div>
 								</div>

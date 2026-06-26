@@ -8,18 +8,6 @@
 	import { getBroadcastsForMatch } from '$lib/broadcasts';
 
 	let { data } = $props();
-	let blogPageNumbers = $derived.by(() => {
-		const total = data.blogPagination?.totalPages ?? 1;
-		const current = data.blogPagination?.page ?? 1;
-		const end = Math.min(total, Math.max(5, current + 2));
-		const start = Math.max(1, Math.min(current - 2, end - 4));
-
-		return Array.from({ length: end - start + 1 }, (_, index) => start + index);
-	});
-
-	function blogPageHref(page: number): string {
-		return page === 1 ? '/#blog' : `/?blogPage=${page}#blog`;
-	}
 
 	/** 12 distinct gradient pairs – only used for group headers */
 	const groupColors: Record<string, { from: string; to: string }> = {
@@ -55,14 +43,16 @@
 	});
 	/** Ranking de mejores terceros en tiempo real (los 8 mejores clasifican). */
 	const THIRDS_ADVANCE = 8;
+	let thirdPlaceRanking = $derived(rankThirdPlacedGroups(data.groups ?? {}));
 	let thirdPlaceRank = $derived.by(() => {
-		const ranking = rankThirdPlacedGroups(data.groups ?? {});
 		const map: Record<string, { rank: number; advances: boolean }> = {};
-		ranking.forEach((entry, index) => {
+		thirdPlaceRanking.forEach((entry, index) => {
 			map[entry.group] = { rank: index + 1, advances: index < THIRDS_ADVANCE };
 		});
 		return map;
 	});
+	/** ¿Hay al menos un partido de grupo jugado? Para mostrar la tabla de terceros. */
+	let hasGroupResults = $derived((data.groupMatches ?? []).some((m: Match) => m.isClosed));
 
 	// Shift kickoff date by -3 hours to group 00:00-02:59 matches in previous day
 	function getShiftedDayKey(kickoffAt: string): string {
@@ -354,64 +344,62 @@
 	</div>
 
 
-	<!-- La pizarra del DT -->
-	{#if data.blogPosts?.length}
-		<div id="blog" class="scroll-mt-24 space-y-4">
-			<div class="flex items-center gap-3">
-				<img src="/guru-futbol.svg" alt="Gurú Táctico" class="h-9 w-9" />
-				<div>
-					<h2 class="text-xl font-black tracking-tight text-slate-900">La Pizarra del DT</h2>
-					<p class="text-xs text-slate-400">Últimos análisis tácticos del Mundial 2026</p>
-				</div>
-			</div>
-			<div class="grid gap-4 md:grid-cols-2">
-				{#each data.blogPosts as post}
-					<a href="/blog/{post.slug}" class="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition-shadow hover:shadow-md">
-						{#if post.imageUrl}
-							<img src={post.imageUrl} alt={post.title} loading="lazy" decoding="async" class="h-40 w-full object-cover" />
-						{/if}
-						<div class="p-4">
-							<h3 class="font-bold text-slate-800 group-hover:text-sky-600">{post.title}</h3>
-							<p class="mt-1 line-clamp-2 text-sm text-slate-500">{post.excerpt}</p>
-							<p class="mt-2 text-xs text-slate-400">
-								{new Date(post.createdAt).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' })}
-							</p>
-						</div>
-					</a>
-				{/each}
-			</div>
-			{#if data.blogPagination?.totalPages > 1}
-				<nav class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm" aria-label="Paginación de artículos">
-					<p class="text-xs font-semibold text-slate-400">
-						Página {data.blogPagination.page} de {data.blogPagination.totalPages} · {data.blogPagination.total} columnas
-					</p>
-					<div class="flex flex-wrap gap-2">
-						<a
-							href={blogPageHref(Math.max(1, data.blogPagination.page - 1))}
-							aria-disabled={data.blogPagination.page === 1}
-							class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-50 aria-disabled:pointer-events-none aria-disabled:opacity-40"
-						>
-							Anterior
-						</a>
-						{#each blogPageNumbers as page}
-							<a
-								href={blogPageHref(page)}
-								aria-current={page === data.blogPagination.page ? 'page' : undefined}
-								class="rounded-lg border px-3 py-2 text-xs font-bold transition-colors {page === data.blogPagination.page ? 'border-sky-600 bg-sky-600 text-white' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}"
-							>
-								{page}
-							</a>
-						{/each}
-						<a
-							href={blogPageHref(Math.min(data.blogPagination.totalPages, data.blogPagination.page + 1))}
-							aria-disabled={data.blogPagination.page === data.blogPagination.totalPages}
-							class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-50 aria-disabled:pointer-events-none aria-disabled:opacity-40"
-						>
-							Siguiente
-						</a>
+	<!-- Tabla de mejores terceros -->
+	{#if hasGroupResults && thirdPlaceRanking.length > 0}
+		<div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+			<div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-5 py-4">
+				<div class="flex items-center gap-3">
+					<span class="text-2xl">🥉</span>
+					<div>
+						<h2 class="text-xl font-black tracking-tight text-slate-900">Mejores Terceros</h2>
+						<p class="text-xs text-slate-400">Los 8 mejores terceros clasifican a 16avos · ranking en vivo</p>
 					</div>
-				</nav>
-			{/if}
+				</div>
+				<span class="rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-bold text-emerald-700 border border-emerald-100">{THIRDS_ADVANCE} clasifican</span>
+			</div>
+			<div class="overflow-x-auto">
+				<table class="w-full text-sm">
+					<thead>
+						<tr class="border-b border-slate-100 text-[11px] uppercase tracking-wider text-slate-400">
+							<th class="w-12 py-2.5 text-center font-semibold">#</th>
+							<th class="px-4 py-2.5 text-left font-semibold">Equipo</th>
+							<th class="w-12 py-2.5 text-center font-semibold">Gr.</th>
+							<th class="w-10 py-2.5 text-center font-semibold">PJ</th>
+							<th class="w-10 py-2.5 text-center font-semibold">DG</th>
+							<th class="w-10 py-2.5 text-center font-semibold">GF</th>
+							<th class="w-12 py-2.5 text-center font-bold">PTS</th>
+						</tr>
+					</thead>
+					<tbody class="divide-y divide-slate-50">
+						{#each thirdPlaceRanking as entry, idx}
+							{@const advances = idx < THIRDS_ADVANCE}
+							<tr class={advances ? 'bg-emerald-50/40' : ''}>
+								<td class="py-2.5 text-center">
+									<span class="inline-flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold text-white {advances ? 'bg-emerald-500' : 'bg-slate-300'}">
+										{idx + 1}
+									</span>
+								</td>
+								<td class="px-4 py-2.5">
+									<div class="flex items-center gap-2.5">
+										{#if getFlagUrl(entry.row.team)}
+											<img src={getFlagUrl(entry.row.team, 40)} alt={entry.row.team} class="h-5 w-7 shrink-0 rounded-sm object-cover shadow-sm" />
+										{/if}
+										<span class="truncate font-semibold text-slate-800">{entry.row.team}</span>
+									</div>
+								</td>
+								<td class="py-2.5 text-center font-semibold text-slate-500">{entry.group}</td>
+								<td class="py-2.5 text-center text-slate-600">{entry.row.played}</td>
+								<td class="py-2.5 text-center text-slate-600">{entry.row.goalDiff}</td>
+								<td class="py-2.5 text-center text-slate-600">{entry.row.goalsFor}</td>
+								<td class="py-2.5 text-center text-base font-black {advances ? 'text-emerald-700' : 'text-slate-500'}">{entry.row.points}</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+			<p class="border-t border-slate-100 px-5 py-3 text-[11px] text-slate-400">
+				Orden FIFA: puntos, diferencia de gol, goles a favor. El corte se confirma cuando termina la fase de grupos.
+			</p>
 		</div>
 	{/if}
 

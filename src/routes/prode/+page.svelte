@@ -2,8 +2,8 @@
 	import { untrack } from 'svelte';
 	import { deserialize } from '$app/forms';
 	import { Badge } from 'flowbite-svelte';
-	import { getFlagUrl, GROUPS, VENUES } from '$lib/teams';
-	import { calcStandings, buildBracket, type LivePred } from '$lib/bracket-engine';
+	import { getFlagUrl, GROUPS, VENUES, getTeamId } from '$lib/teams';
+	import { calcStandings, buildBracket, type LivePred, type BracketSlot } from '$lib/bracket-engine';
 	import { rankThirdPlacedGroups } from '$lib/bracket-rules';
 	import { formatMatchDate as formatDateShort, formatMatchTime as formatTime } from '$lib/match-datetime';
 	import { STAGE_LABELS } from '$lib/scoring-config';
@@ -42,6 +42,42 @@ import type { Match } from '$lib/types';
 	const groupMatches = $derived(data.matches.filter((m) => m.stage === 'groups'));
 	const standings = $derived(calcStandings(groupMatches, preds));
 	const bracket = $derived(buildBracket(data.matches, preds));
+
+	/* ─── Aciertos del bracket (pronóstico vs. equipos reales) ─── */
+	// Set de ids de los 48 equipos reales (los que aparecen en partidos de grupos).
+	const realTeamIds = $derived.by(() => {
+		const set = new Set<string>();
+		for (const m of data.matches) {
+			if (m.stage !== 'groups') continue;
+			set.add(getTeamId(m.teamA));
+			set.add(getTeamId(m.teamB));
+		}
+		return set;
+	});
+
+	type SideAccuracy = 'pending' | 'hit' | 'miss';
+	interface BracketAccuracy {
+		a: SideAccuracy;
+		b: SideAccuracy;
+		/** Ambos casilleros resueltos y ambos errados → llave muerta (sin chances de sumar). */
+		dead: boolean;
+		realA: string;
+		realB: string;
+	}
+
+	// Un casillero solo se evalúa cuando el equipo real ya está definido (sincronizado al
+	// cerrarse la fase de grupos) y el pronóstico del usuario resolvió ese lado.
+	function sideAccuracy(realTeam: string, predTeam: string | undefined, predResolved: boolean): SideAccuracy {
+		if (!predResolved || !predTeam) return 'pending';
+		if (!realTeamIds.has(getTeamId(realTeam))) return 'pending';
+		return getTeamId(predTeam) === getTeamId(realTeam) ? 'hit' : 'miss';
+	}
+
+	function bracketAccuracy(match: Match, slot: BracketSlot | undefined): BracketAccuracy {
+		const a = sideAccuracy(match.teamA, slot?.teamA, !!slot?.autoA);
+		const b = sideAccuracy(match.teamB, slot?.teamB, !!slot?.autoB);
+		return { a, b, dead: a === 'miss' && b === 'miss', realA: match.teamA, realB: match.teamB };
+	}
 	/* ─── Ranking de mejores terceros (los 8 mejores clasifican) ─── */
 	const THIRDS_ADVANCE = 8;
 	const thirdPlaceRank = $derived.by(() => {
@@ -480,14 +516,23 @@ import type { Match } from '$lib/types';
 					{@const matchCanEdit = canEditMatch(match)}
 					{@const isFinalMatch = match.id === 'final'}
 					{@const is3rd = match.id === '3rd'}
+					{@const acc = bracketAccuracy(match, slot)}
 					<div
 						class="card-3d overflow-hidden rounded-2xl border shadow-lg transition-all duration-300
-						{isFinalMatch
-							? 'border-amber-300 bg-gradient-to-br from-amber-50 to-white ring-2 ring-amber-200'
-							: is3rd
-								? 'border-orange-200 bg-gradient-to-br from-orange-50 to-white'
-								: 'border-slate-200 bg-white hover:shadow-xl'}"
+						{acc.dead
+							? 'border-rose-300 bg-gradient-to-br from-rose-50 to-white ring-2 ring-rose-300'
+							: isFinalMatch
+								? 'border-amber-300 bg-gradient-to-br from-amber-50 to-white ring-2 ring-amber-200'
+								: is3rd
+									? 'border-orange-200 bg-gradient-to-br from-orange-50 to-white'
+									: 'border-slate-200 bg-white hover:shadow-xl'}"
 					>
+						{#if acc.dead}
+							<div class="flex items-center gap-2 bg-rose-600 px-4 py-2 text-white">
+								<span class="text-base">💀</span>
+								<span class="text-[11px] font-black uppercase tracking-wide">Llave muerta — erraste los dos equipos del cruce, ya no podés sumar acá</span>
+							</div>
+						{/if}
 						<!-- Match header -->
 						<div class="flex items-center justify-between px-4 py-2.5 {isFinalMatch ? 'bg-amber-100/60' : is3rd ? 'bg-orange-100/60' : 'bg-slate-50'}">
 							<div class="flex flex-wrap items-center gap-2">
@@ -524,15 +569,25 @@ import type { Match } from '$lib/types';
 
 						<div class="space-y-3 p-4">
 							<!-- Team A -->
-							<div class="flex items-center justify-between rounded-xl p-2.5 transition-colors {pred.predA !== null && pred.predB !== null && ((pred.predA > pred.predB) || (pred.predA === pred.predB && pred.predPenaltyWinner === 'A')) ? 'bg-emerald-50 ring-1 ring-emerald-200' : 'bg-slate-50'}">
-								<div class="flex items-center gap-2.5">
+							<div class="flex items-center justify-between rounded-xl p-2.5 transition-colors {acc.a === 'miss' ? 'bg-slate-100/70' : pred.predA !== null && pred.predB !== null && ((pred.predA > pred.predB) || (pred.predA === pred.predB && pred.predPenaltyWinner === 'A')) ? 'bg-emerald-50 ring-1 ring-emerald-200' : 'bg-slate-50'}">
+								<div class="flex items-center gap-2.5 {acc.a === 'miss' ? 'opacity-60' : ''}">
 									{#if getFlagUrl(teamA)}
-										<img src={getFlagUrl(teamA, 48)} alt="" class="h-7 w-10 rounded object-cover shadow-sm" />
+										<img src={getFlagUrl(teamA, 48)} alt="" class="h-7 w-10 rounded object-cover shadow-sm {acc.a === 'miss' ? 'grayscale' : ''}" />
 									{/if}
 									<div>
-										<span class="text-sm font-bold text-slate-800">{teamA}</span>
-										{#if slot?.autoA}
-											<span class="ml-1.5 rounded bg-sky-100 px-1 py-0.5 text-[8px] font-bold text-sky-600">AUTO</span>
+										<div class="flex flex-wrap items-center gap-1.5">
+											<span class="text-sm font-bold {acc.a === 'miss' ? 'text-slate-400 line-through' : 'text-slate-800'}">{teamA}</span>
+											{#if slot?.autoA}
+												<span class="rounded bg-sky-100 px-1 py-0.5 text-[8px] font-bold text-sky-600">AUTO</span>
+											{/if}
+											{#if acc.a === 'hit'}
+												<span class="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[8px] font-black text-emerald-700">✓ acertaste</span>
+											{:else if acc.a === 'miss'}
+												<span class="rounded-full bg-rose-100 px-1.5 py-0.5 text-[8px] font-black text-rose-700">✗ no pasó</span>
+											{/if}
+										</div>
+										{#if acc.a === 'miss'}
+											<p class="mt-0.5 text-[10px] font-semibold text-slate-500">Pasó: {acc.realA}</p>
 										{/if}
 									</div>
 								</div>
@@ -562,15 +617,25 @@ import type { Match } from '$lib/types';
 							</div>
 
 							<!-- Team B -->
-							<div class="flex items-center justify-between rounded-xl p-2.5 transition-colors {pred.predA !== null && pred.predB !== null && ((pred.predB > pred.predA) || (pred.predA === pred.predB && pred.predPenaltyWinner === 'B')) ? 'bg-emerald-50 ring-1 ring-emerald-200' : 'bg-slate-50'}">
-								<div class="flex items-center gap-2.5">
+							<div class="flex items-center justify-between rounded-xl p-2.5 transition-colors {acc.b === 'miss' ? 'bg-slate-100/70' : pred.predA !== null && pred.predB !== null && ((pred.predB > pred.predA) || (pred.predA === pred.predB && pred.predPenaltyWinner === 'B')) ? 'bg-emerald-50 ring-1 ring-emerald-200' : 'bg-slate-50'}">
+								<div class="flex items-center gap-2.5 {acc.b === 'miss' ? 'opacity-60' : ''}">
 									{#if getFlagUrl(teamB)}
-										<img src={getFlagUrl(teamB, 48)} alt="" class="h-7 w-10 rounded object-cover shadow-sm" />
+										<img src={getFlagUrl(teamB, 48)} alt="" class="h-7 w-10 rounded object-cover shadow-sm {acc.b === 'miss' ? 'grayscale' : ''}" />
 									{/if}
 									<div>
-										<span class="text-sm font-bold text-slate-800">{teamB}</span>
-										{#if slot?.autoB}
-											<span class="ml-1.5 rounded bg-sky-100 px-1 py-0.5 text-[8px] font-bold text-sky-600">AUTO</span>
+										<div class="flex flex-wrap items-center gap-1.5">
+											<span class="text-sm font-bold {acc.b === 'miss' ? 'text-slate-400 line-through' : 'text-slate-800'}">{teamB}</span>
+											{#if slot?.autoB}
+												<span class="rounded bg-sky-100 px-1 py-0.5 text-[8px] font-bold text-sky-600">AUTO</span>
+											{/if}
+											{#if acc.b === 'hit'}
+												<span class="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[8px] font-black text-emerald-700">✓ acertaste</span>
+											{:else if acc.b === 'miss'}
+												<span class="rounded-full bg-rose-100 px-1.5 py-0.5 text-[8px] font-black text-rose-700">✗ no pasó</span>
+											{/if}
+										</div>
+										{#if acc.b === 'miss'}
+											<p class="mt-0.5 text-[10px] font-semibold text-slate-500">Pasó: {acc.realB}</p>
 										{/if}
 									</div>
 								</div>

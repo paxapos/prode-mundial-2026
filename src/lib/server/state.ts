@@ -927,10 +927,14 @@ export async function removeUserFromTournament(input: { userId: string; tourname
 	clearLeaderboardCache();
 }
 
+// El torneo se considera "bloqueado" para edición global SOLO cuando el admin lo bloqueó
+// explícitamente (state 'locked') o ya terminó ('finished'). El comienzo del torneo NO
+// bloquea todo el prode: cada partido se cierra por su cuenta 10 minutos antes de su
+// kickoff (ver savePrediction y canEditMatch). Así, con el prode desbloqueado el usuario
+// puede seguir cargando pronósticos de partidos que todavía no empezaron (p. ej. 16avos),
+// aunque la fase de grupos ya haya arrancado.
 async function isTournamentLocked(tournament: Tournament): Promise<boolean> {
-	if (tournament.state === 'locked' || tournament.state === 'finished') return true;
-	const start = new Date(tournament.startAt).getTime();
-	return Number.isFinite(start) && Date.now() >= start;
+	return tournament.state === 'locked' || tournament.state === 'finished';
 }
 
 export async function listMatches(tournamentId: string): Promise<Match[]> {
@@ -1688,9 +1692,12 @@ export async function getTournamentSettings(tournamentId: string): Promise<Tourn
 	// For ligas, settings come from the source (parent) tournament
 	const source = tournament.parentTournamentId ? await getTournamentById(tournament.parentTournamentId) : tournament;
 	if (!source) throw new Error('Competicion inexistente.');
-	const lockedByDate = source.state === 'open_predictions' && Date.now() >= new Date(source.startAt).getTime();
 	return {
-		state: lockedByDate ? 'locked' : source.state,
+		// Reportamos el estado real del torneo. El cierre por partido (10 min antes del
+		// kickoff) se maneja a nivel de cada partido y no marcando todo el torneo como
+		// 'locked' al arrancar; así "Desbloquear" desde el admin tiene efecto real y el
+		// badge refleja si el prode está realmente abierto.
+		state: source.state,
 		tournamentStartAt: source.startAt,
 		lockReason: source.lockReason
 	};

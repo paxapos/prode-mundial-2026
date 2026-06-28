@@ -2,7 +2,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import * as THREE from 'three';
 	import { getFlagUrl } from '$lib/teams';
-	import { loserConnections, winnerConnections } from '$lib/bracket-rules';
+	import { FLOW, loserConnections, winnerConnections } from '$lib/bracket-rules';
 	import type { Match } from '$lib/types';
 
 	interface Props {
@@ -81,28 +81,58 @@
 	const FOV_DEG = 50;
 	const TAN_HALF_FOV = Math.tan((FOV_DEG / 2) * Math.PI / 180);
 
-	/** Compute camera distance so all N cards per side fit in viewport */
-	function stageViewDist(stage: string): number {
-		const n = STAGE_COUNT_PER_SIDE[stage] ?? 1;
-		if (n <= 1) return 300;
-		const optGap = CARD_H * 1.4;
-		const totalSpan = (n - 1) * optGap;
-		return (totalSpan / 2 + CARD_H) / TAN_HALF_FOV + 60;
+	/** Stage of a node, inferred from its id */
+	function stageOf(id: string): string {
+		if (id.startsWith('r32-')) return 'round32';
+		if (id.startsWith('r16-')) return 'round16';
+		if (id.startsWith('qf-')) return 'quarterfinal';
+		if (id.startsWith('sf-')) return 'semifinal';
+		if (id === 'final') return 'final';
+		if (id === '3rd') return 'thirdplace';
+		return 'round32';
 	}
 
-	const LEFT_SET = new Set([
-		'r32-01','r32-02','r32-03','r32-04','r32-05','r32-06','r32-07','r32-08',
-		'r16-01','r16-02','r16-03','r16-04',
-		'qf-01','qf-02','sf-01'
-	]);
+	// ── Build the bracket tree from FLOW: target → [A-feeder, B-feeder] ──
+	const CHILDREN = new Map<string, [string?, string?]>();
+	for (const [fromId, flow] of Object.entries(FLOW)) {
+		const [toId, side] = flow.w;
+		const pair = CHILDREN.get(toId) ?? ([undefined, undefined] as [string?, string?]);
+		pair[side === 'A' ? 0 : 1] = fromId;
+		CHILDREN.set(toId, pair);
+	}
+
+	/** Depth-first leaf (R32) order under a subtree root — defines vertical stacking */
+	function leafOrder(rootId: string): string[] {
+		const out: string[] = [];
+		const walk = (id: string) => {
+			const kids = CHILDREN.get(id);
+			if (!kids) { out.push(id); return; }
+			for (const k of kids) if (k) walk(k);
+		};
+		walk(rootId);
+		return out;
+	}
+
+	// Left half feeds sf-01, right half feeds sf-02 (true FIFA bracket halves)
+	const LEFT_LEAVES = leafOrder('sf-01');
+	const RIGHT_LEAVES = leafOrder('sf-02');
+
+	// Which nodes live on the left half (used for connector direction)
+	const LEFT_SET = new Set<string>();
+	{
+		const mark = (id: string) => {
+			LEFT_SET.add(id);
+			const kids = CHILDREN.get(id);
+			if (kids) for (const k of kids) if (k) mark(k);
+		};
+		mark('sf-01');
+	}
 
 	const WINNER_CONNS = winnerConnections();
 	const LOSER_CONNS = loserConnections();
 
-	// How many cards per side for each stage (for optimal spread computation)
-	const STAGE_COUNT_PER_SIDE: Record<string, number> = {
-		round32: 8, round16: 4, quarterfinal: 2, semifinal: 1, thirdplace: 1, final: 1
-	};
+	// Vertical span (center-to-center) of each stage's column — filled by computeBasePositions
+	const STAGE_SPAN: Record<string, number> = {};
 
 	// Mesh storage
 	let cardMeshes: { mesh: THREE.Mesh; shadow: THREE.Mesh; id: string; stage: string }[] = [];
@@ -110,126 +140,74 @@
 	let connGroup = new THREE.Group();
 	let glowMesh: THREE.Mesh;
 
-	// ── Compute base positions ──
+	/** Camera distance so a whole stage column fits comfortably in the viewport */
+	function stageViewDist(stage: string): number {
+		const span = STAGE_SPAN[stage] ?? 0;
+		return (span / 2 + CARD_H * 1.7) / TAN_HALF_FOV + 70;
+	}
+
+	// ── Compute base positions as a clean binary tree derived from FLOW ──
+	// Every match sits exactly at the vertical midpoint of the two matches that
+	// feed it, and those two feeders are stacked one directly above the other.
+	// This guarantees the connectors form a real tournament tree with no crossings.
 	function computeBasePositions(cw: number, ch: number): void {
 		const aspect = cw / ch;
+		basePositions.clear();
 
-		// Uniform gap: same spacing between card edges in X and Y
-		const UGAP = CARD_H * 0.4;
-		const vGap = CARD_H + UGAP; // vertical center-to-center
-		const minColX = (CARD_W + UGAP) / 2; // minimum column center distance from axis
+		const UGAP = CARD_H * 0.5;
+		const vGap = CARD_H + UGAP; // R32 center-to-center spacing
 
-		// Column X per stage: wider for outer stages, never less than minColX
-		const colR32 = Math.max(minColX, CARD_W * 1.15);
-		const colR16 = Math.max(minColX, CARD_W * 0.75);
-		const colQF = Math.max(minColX, CARD_W * 0.62);
-		const colSF = Math.max(minColX, CARD_W * 0.58);
+		const minCol = (CARD_W + UGAP) / 2;
+		const COL: Record<string, number> = {
+			round32: Math.max(minCol, CARD_W * 1.15),
+			round16: Math.max(minCol, CARD_W * 0.78),
+			quarterfinal: Math.max(minCol, CARD_W * 0.64),
+			semifinal: Math.max(minCol, CARD_W * 0.6)
+		};
 
-		const totalV = 7 * vGap; // center-to-center span of 8 cards
+		// Recursively place a subtree; returns the node's Y (centered between children)
+		function place(id: string, side: 'left' | 'right'): number {
+			const stage = stageOf(id);
+			const sign = side === 'left' ? -1 : 1;
+			const kids = CHILDREN.get(id);
+			let y: number;
+			if (!kids) {
+				const leaves = side === 'left' ? LEFT_LEAVES : RIGHT_LEAVES;
+				const idx = leaves.indexOf(id);
+				y = ((leaves.length - 1) / 2 - idx) * vGap;
+			} else {
+				const ys = kids.filter((k): k is string => !!k).map((k) => place(k, side));
+				y = ys.reduce((a, b) => a + b, 0) / ys.length;
+			}
+			const col = COL[stage] ?? minCol;
+			basePositions.set(id, { baseX: sign * col, baseY: y, y, z: LAYER_Z[stage] });
+			return y;
+		}
 
-		// Compute initialCamZ so all R32 cards fit in frustum
-		const needV = totalV / 2 + CARD_H;
-		const needH = colR32 + CARD_W / 2 + CARD_W * 0.2;
+		place('sf-01', 'left');
+		place('sf-02', 'right');
+
+		// Final at center back, 3rd-place match just below it
+		basePositions.set('final', { baseX: 0, baseY: 0, y: 0, z: LAYER_Z.final });
+		basePositions.set('3rd', { baseX: 0, baseY: -(vGap * 0.95), y: -(vGap * 0.95), z: LAYER_3RD_Z });
+
+		// Vertical span per stage (for camera framing)
+		const byStage: Record<string, number[]> = {};
+		for (const [id, bp] of basePositions) {
+			(byStage[stageOf(id)] ??= []).push(bp.baseY);
+		}
+		for (const st of STAGES_ORDERED) {
+			const ys = byStage[st] ?? [0];
+			STAGE_SPAN[st] = Math.max(...ys) - Math.min(...ys);
+		}
+
+		// Camera distance so all 8 R32 cards per side fit (vertical & horizontal)
+		const needV = STAGE_SPAN.round32 / 2 + CARD_H;
+		const needH = COL.round32 + CARD_W / 2 + CARD_W * 0.2;
 		initialCamZ = Math.max(
 			needV / TAN_HALF_FOV + 80,
 			needH / (TAN_HALF_FOV * aspect) + 80
 		);
-
-		basePositions.clear();
-
-		const lr32 = ['r32-01','r32-02','r32-03','r32-04','r32-05','r32-06','r32-07','r32-08'];
-		for (let i = 0; i < 8; i++)
-			basePositions.set(lr32[i], { baseX: -colR32, baseY: (3.5 - i) * vGap, y: (3.5 - i) * vGap, z: LAYER_Z.round32 });
-
-		const lr16 = ['r16-01','r16-02','r16-03','r16-04'];
-		for (let i = 0; i < 4; i++) {
-			const y = (basePositions.get(lr32[i*2])!.baseY + basePositions.get(lr32[i*2+1])!.baseY) / 2;
-			basePositions.set(lr16[i], { baseX: -colR16, baseY: y, y, z: LAYER_Z.round16 });
-		}
-
-		const lqf = ['qf-01','qf-02'];
-		for (let i = 0; i < 2; i++) {
-			const y = (basePositions.get(lr16[i*2])!.baseY + basePositions.get(lr16[i*2+1])!.baseY) / 2;
-			basePositions.set(lqf[i], { baseX: -colQF, baseY: y, y, z: LAYER_Z.quarterfinal });
-		}
-
-		const sfY = (basePositions.get('qf-01')!.baseY + basePositions.get('qf-02')!.baseY) / 2;
-		basePositions.set('sf-01', { baseX: -colSF, baseY: sfY, y: sfY, z: LAYER_Z.semifinal });
-
-		const rr32 = ['r32-09','r32-10','r32-11','r32-12','r32-13','r32-14','r32-15','r32-16'];
-		for (let i = 0; i < 8; i++)
-			basePositions.set(rr32[i], { baseX: colR32, baseY: (3.5 - i) * vGap, y: (3.5 - i) * vGap, z: LAYER_Z.round32 });
-
-		const rr16 = ['r16-05','r16-06','r16-07','r16-08'];
-		for (let i = 0; i < 4; i++) {
-			const y = (basePositions.get(rr32[i*2])!.baseY + basePositions.get(rr32[i*2+1])!.baseY) / 2;
-			basePositions.set(rr16[i], { baseX: colR16, baseY: y, y, z: LAYER_Z.round16 });
-		}
-
-		const rqf = ['qf-03','qf-04'];
-		for (let i = 0; i < 2; i++) {
-			const y = (basePositions.get(rr16[i*2])!.baseY + basePositions.get(rr16[i*2+1])!.baseY) / 2;
-			basePositions.set(rqf[i], { baseX: colQF, baseY: y, y, z: LAYER_Z.quarterfinal });
-		}
-
-		const sfY2 = (basePositions.get('qf-03')!.baseY + basePositions.get('qf-04')!.baseY) / 2;
-		basePositions.set('sf-02', { baseX: colSF, baseY: sfY2, y: sfY2, z: LAYER_Z.semifinal });
-
-		basePositions.set('final', { baseX: 0, baseY: CARD_H, y: CARD_H, z: LAYER_Z.final });
-		basePositions.set('3rd', { baseX: 0, baseY: -(CARD_H + UGAP), y: -(CARD_H + UGAP), z: LAYER_3RD_Z });
-	}
-
-	/** Proximity factor: 0 when far, 1 when camera is right at the layer */
-	function getProximity(stageZ: number, camZ: number): number {
-		const dist = camZ - stageZ;
-		return Math.max(0, Math.min(1, 1 - (dist - 100) / 600));
-	}
-
-	/** Dynamic X spread: layers near camera spread wide, far layers stay narrow */
-	function getSpread(stageZ: number, camZ: number): number {
-		return 1 + getProximity(stageZ, camZ) * 2.2;
-	}
-
-	function getWorldX(id: string, camZ: number): number {
-		const bp = basePositions.get(id);
-		if (!bp) return 0;
-		return bp.baseX * getSpread(bp.z, camZ);
-	}
-
-	/** Compute dynamic Y: lerp from baseY (centered between parents) to optimal spread */
-	function getWorldY(id: string, camZ: number): number {
-		const bp = basePositions.get(id);
-		if (!bp) return 0;
-		const prox = getProximity(bp.z, camZ);
-		if (prox <= 0) return bp.baseY;
-
-		// Determine stage and per-side count
-		const entry = cardMeshes.find(c => c.id === id);
-		const stage = entry?.stage ?? 'round32';
-		const n = STAGE_COUNT_PER_SIDE[stage] ?? 1;
-		if (n <= 1) return bp.baseY; // single card, no spread needed
-
-		// Compute optimal gap: fill visible vertical space with padding
-		// but never below the uniform minimum
-		const minGap = CARD_H * 1.4; // uniform min center-to-center
-		const distToLayer = Math.max(200, camZ - bp.z);
-		const visibleH = 2 * distToLayer * TAN_HALF_FOV;
-		const optimalGap = Math.max(minGap, Math.min((visibleH * 0.85) / (n - 1), CARD_H * 3));
-
-		// Collect the per-side cards for this stage sorted by baseY desc
-		const isLeft = LEFT_SET.has(id);
-		const siblings = [...basePositions.entries()]
-			.filter(([k]) => {
-				const ce = cardMeshes.find(c => c.id === k);
-				return ce?.stage === stage && LEFT_SET.has(k) === isLeft;
-			})
-			.sort((a, b) => b[1].baseY - a[1].baseY);
-
-		const idx = siblings.findIndex(([k]) => k === id);
-		if (idx < 0) return bp.baseY;
-
-		const optY = ((siblings.length - 1) / 2 - idx) * optimalGap;
-		return bp.baseY + (optY - bp.baseY) * prox;
 	}
 
 	// ── Card texture ──
@@ -314,45 +292,39 @@
 		return new THREE.CanvasTexture(c);
 	}
 
-	// ── Reconstruct connectors ──
+	// ── Build connectors as a static tree (positions never change at runtime) ──
 	function rebuildConnectors() {
-		scene.remove(connGroup);
+		if (connGroup) scene.remove(connGroup);
 		connGroup = new THREE.Group();
-		const camZ = getCamZ();
-		const mat = new THREE.LineBasicMaterial({ color: 0x94a3b8, transparent: true, opacity: 0.4 });
+		const mat = new THREE.LineBasicMaterial({ color: 0x64748b, transparent: true, opacity: 0.5 });
 
 		for (const [fromId, toId] of WINNER_CONNS) {
 			const fb = basePositions.get(fromId), tb = basePositions.get(toId);
 			if (!fb || !tb) continue;
-			const fromX = getWorldX(fromId, camZ);
-			const toX = getWorldX(toId, camZ);
-			const fromY = getWorldY(fromId, camZ);
-			const toY = getWorldY(toId, camZ);
-			const isL = LEFT_SET.has(fromId);
-			const ex = fromX + (isL ? CARD_W / 2 : -CARD_W / 2);
-			const en = toX + (isL ? -CARD_W / 2 : CARD_W / 2);
+			const isL = fb.baseX < 0;
+			const ex = fb.baseX + (isL ? CARD_W / 2 : -CARD_W / 2);
+			const en = tb.baseX + (isL ? -CARD_W / 2 : CARD_W / 2);
 			const d = isL ? 1 : -1;
 			const zM = (fb.z + tb.z) / 2;
 
+			// Horizontal run out of the feeder, then a smooth elbow up/down into the parent
 			const curve = new THREE.CubicBezierCurve3(
-				new THREE.Vector3(ex, fromY, fb.z),
-				new THREE.Vector3(ex + d * 40, fromY, zM * 0.7 + fb.z * 0.3),
-				new THREE.Vector3(en - d * 40, toY, zM * 0.3 + tb.z * 0.7),
-				new THREE.Vector3(en, toY, tb.z)
+				new THREE.Vector3(ex, fb.baseY, fb.z),
+				new THREE.Vector3(ex + d * 50, fb.baseY, zM * 0.7 + fb.z * 0.3),
+				new THREE.Vector3(en - d * 50, tb.baseY, zM * 0.3 + tb.z * 0.7),
+				new THREE.Vector3(en, tb.baseY, tb.z)
 			);
-			connGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(curve.getPoints(18)), mat));
+			connGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(curve.getPoints(24)), mat));
 		}
 
-		const dMat = new THREE.LineDashedMaterial({ color: 0x94a3b8, transparent: true, opacity: 0.2, dashSize: 8, gapSize: 6 });
+		const dMat = new THREE.LineDashedMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.3, dashSize: 8, gapSize: 6 });
 		for (const [fromId, toId] of LOSER_CONNS) {
 			const fb = basePositions.get(fromId), tb = basePositions.get(toId);
 			if (!fb || !tb) continue;
-			const fx = getWorldX(fromId, camZ), tx = getWorldX(toId, camZ);
-			const fy = getWorldY(fromId, camZ), ty = getWorldY(toId, camZ);
-			const isL = LEFT_SET.has(fromId);
+			const isL = fb.baseX < 0;
 			const pts = [
-				new THREE.Vector3(fx + (isL ? CARD_W / 2 : -CARD_W / 2), fy, fb.z),
-				new THREE.Vector3(tx, ty, tb.z)
+				new THREE.Vector3(fb.baseX + (isL ? CARD_W / 2 : -CARD_W / 2), fb.baseY, fb.z),
+				new THREE.Vector3(tb.baseX, tb.baseY, tb.z)
 			];
 			const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), dMat);
 			l.computeLineDistances();
@@ -466,27 +438,7 @@
 
 		const camZ = getCamZ();
 
-		for (const e of cardMeshes) {
-			const bp = basePositions.get(e.id);
-			if (!bp) continue;
-			const x = getWorldX(e.id, camZ);
-			const y = getWorldY(e.id, camZ);
-			e.mesh.position.x = x;
-			e.mesh.position.y = y;
-			e.shadow.position.x = x + 2;
-			e.shadow.position.y = y - 2;
-		}
-
-		rebuildConnectors();
-
-		if (glowMesh) {
-			const fb = basePositions.get('final');
-			if (fb) {
-				glowMesh.position.x = getWorldX('final', camZ);
-				glowMesh.position.y = getWorldY('final', camZ);
-			}
-		}
-
+		// Card / connector positions are a static tree — only the camera moves.
 		if (scene.fog instanceof THREE.Fog) {
 			scene.fog.near = initialCamZ * 0.5 + zoomT * initialCamZ * 0.4;
 			scene.fog.far = initialCamZ + 800 + zoomT * 600;

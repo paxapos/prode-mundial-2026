@@ -76,8 +76,10 @@
 	let smoothGyro = { x: 0, y: 0 };
 	let gyroBase: { beta: number; gamma: number } | null = null;
 
-	// Reactive stage label
+	// Reactive stage label + auto-hiding onboarding hint
 	let currentStageKey = $state('round32');
+	let showHint = $state(true);
+	let hintTimer: ReturnType<typeof setTimeout> | null = null;
 
 	// Responsive card size
 	let CARD_W = 250;
@@ -810,13 +812,19 @@
 		targetPanY = 0;
 	}
 
-	onMount(() => { buildScene(); window.addEventListener('resize', onResize); requestGyro(); });
+	onMount(() => {
+		buildScene();
+		window.addEventListener('resize', onResize);
+		requestGyro();
+		hintTimer = setTimeout(() => { showHint = false; }, 5000);
+	});
 	onDestroy(() => {
 		// onDestroy also runs during SSR teardown — bail out when there's no browser.
 		if (typeof window === 'undefined') return;
 		destroyed = true;
 		if (animId) cancelAnimationFrame(animId);
 		if (resizeTimer) clearTimeout(resizeTimer);
+		if (hintTimer) clearTimeout(hintTimer);
 		window.removeEventListener('resize', onResize);
 		window.removeEventListener('deviceorientation', onDeviceOrientation);
 		if (scene) {
@@ -836,41 +844,41 @@
 	class="relative w-full overflow-hidden rounded-2xl border border-slate-200 bg-[#f0f4f8] shadow-sm"
 	style="height: 78vh; min-height: 520px; touch-action: none;"
 >
-	<!-- Floating stage label -->
+	<!-- Floating stage label (top center) -->
 	<div class="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2">
-		<div class="pointer-events-auto rounded-xl {STAGE_COLORS_UI[currentStageKey]?.bg ?? 'bg-slate-500'} {STAGE_COLORS_UI[currentStageKey]?.text ?? 'text-white'} px-5 py-2 text-sm font-black tracking-wide shadow-lg transition-all duration-300">
+		<div class="whitespace-nowrap rounded-full {STAGE_COLORS_UI[currentStageKey]?.bg ?? 'bg-slate-500'} {STAGE_COLORS_UI[currentStageKey]?.text ?? 'text-white'} px-5 py-2 text-sm font-black tracking-wide shadow-lg transition-all duration-300">
 			{STAGE_NAMES[currentStageKey] ?? currentStageKey}
 		</div>
 	</div>
 
-	<!-- Stage quick-nav pills -->
-	<div class="absolute bottom-3 left-3 z-10 flex flex-wrap gap-1">
-		{#each STAGES_ORDERED as st, idx}
-			<button
-				onclick={() => goToStage(idx)}
-				class="rounded-lg px-2.5 py-1 text-[10px] font-bold shadow-sm backdrop-blur transition-all
-					{currentStageKey === st
-						? (STAGE_COLORS_UI[st]?.bg ?? 'bg-slate-500') + ' text-white'
-						: 'bg-white/90 text-slate-600 hover:bg-white'}"
-			>{CARD_STAGE_LBL[st] ?? st}</button>
-		{/each}
-	</div>
-
-	<!-- Zoom + reset -->
-	<div class="absolute bottom-3 right-3 z-10 flex gap-1.5">
-		<button onclick={() => { targetZoomT = Math.min(1, targetZoomT + 0.2); }}
-			class="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-base font-bold text-slate-700 shadow-sm backdrop-blur hover:bg-white" aria-label="Zoom in">+</button>
-		<button onclick={() => { targetZoomT = Math.max(0, targetZoomT - 0.2); }}
-			class="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-base font-bold text-slate-700 shadow-sm backdrop-blur hover:bg-white" aria-label="Zoom out">−</button>
-		<button onclick={() => { targetZoomT = 0; targetPanX = 0; targetPanY = 0; }}
-			class="flex h-8 items-center justify-center rounded-full bg-white/90 px-2.5 text-xs font-bold text-slate-600 shadow-sm backdrop-blur hover:bg-white" aria-label="Reset">⟲</button>
-	</div>
-
-	<!-- Help -->
-	<div class="pointer-events-none absolute right-3 top-3 z-10">
-		<span class="rounded-lg bg-white/80 px-2.5 py-1 text-[10px] font-medium text-slate-400 shadow-sm backdrop-blur">
-			Scroll / Pinch = avanzar fase
+	<!-- Auto-hiding onboarding hint (below the label, fades out) -->
+	<div class="pointer-events-none absolute left-1/2 top-14 z-10 -translate-x-1/2 transition-opacity duration-700 {showHint ? 'opacity-100' : 'opacity-0'}">
+		<span class="whitespace-nowrap rounded-full bg-white/85 px-3 py-1 text-[10px] font-medium text-slate-500 shadow-sm backdrop-blur">
+			👆 Arrastrá · pellizcá o scroll para avanzar de fase
 		</span>
+	</div>
+
+	<!-- Bottom control bar: phase nav (scrollable) + zoom (fixed right) -->
+	<div class="absolute inset-x-3 bottom-3 z-10 flex items-center gap-2">
+		<div class="flex flex-1 gap-1 overflow-x-auto py-0.5 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+			{#each STAGES_ORDERED as st, idx}
+				<button
+					onclick={() => goToStage(idx)}
+					class="shrink-0 whitespace-nowrap rounded-lg px-2.5 py-1 text-[10px] font-bold shadow-sm backdrop-blur transition-all
+						{currentStageKey === st
+							? (STAGE_COLORS_UI[st]?.bg ?? 'bg-slate-500') + ' text-white'
+							: 'bg-white/90 text-slate-600 hover:bg-white'}"
+				>{CARD_STAGE_LBL[st] ?? st}</button>
+			{/each}
+		</div>
+		<div class="flex shrink-0 gap-1.5">
+			<button onclick={() => { targetZoomT = Math.min(1, targetZoomT + 0.2); }}
+				class="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-base font-bold text-slate-700 shadow-sm backdrop-blur hover:bg-white" aria-label="Acercar">+</button>
+			<button onclick={() => { targetZoomT = Math.max(0, targetZoomT - 0.2); }}
+				class="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-base font-bold text-slate-700 shadow-sm backdrop-blur hover:bg-white" aria-label="Alejar">−</button>
+			<button onclick={() => { targetZoomT = 0; targetPanX = 0; targetPanY = 0; }}
+				class="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-sm font-bold text-slate-600 shadow-sm backdrop-blur hover:bg-white" aria-label="Reiniciar vista">⟲</button>
+		</div>
 	</div>
 
 	<!-- svelte-ignore a11y_no_static_element_interactions -->

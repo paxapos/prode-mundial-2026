@@ -534,6 +534,26 @@ function isBestThirdCutoffResolved(standings: Record<string, GroupStandingRow[]>
 	return compareThirdPlaceMetrics(thirds[7].row, thirds[8].row) !== 0;
 }
 
+function groupFullyPlayed(matches: Match[], group: string): boolean {
+	const groupMatches = matches.filter((match) => match.stage === 'groups' && match.groupCode === group);
+	return groupMatches.length > 0 && groupMatches.every((match) => match.scoreA !== null && match.scoreB !== null);
+}
+
+// Equipo real de una posición de grupo, resuelto de forma PROGRESIVA: solo cuando ese grupo ya
+// jugó sus 6 partidos y la posición no quedó empatada (mismos criterios FIFA + desempate manual).
+// Así se pueden ir mostrando los cruces de los grupos ya terminados sin esperar a que cierre toda
+// la fase de grupos. Devuelve null si la posición todavía no es definitiva.
+function resolvedGroupPositionTeam(
+	standings: Record<string, GroupStandingRow[]>,
+	matches: Match[],
+	group: string,
+	position: number
+): string | null {
+	if (!groupFullyPlayed(matches, group)) return null;
+	if (!isGroupPositionResolved(standings, matches, group, position)) return null;
+	return teamAt(standings, group, position);
+}
+
 async function updateKnockoutSlot(
 	sourceId: string,
 	matchId: string,
@@ -708,8 +728,9 @@ function resolveRound32TeamsForDisplay(
 	standings: Record<string, GroupStandingRow[]>,
 	manualOverrideMatchIds = new Set<string>()
 ): Match[] {
-	if (!groupStageIsComplete(matches)) return matches;
-
+	// Resolución progresiva: cada lado del cruce se completa apenas su grupo de origen termina
+	// (no se espera a que cierre toda la fase de grupos). Los terceros, en cambio, dependen del
+	// corte global 8°/9°, así que recién aparecen cuando ese corte queda definido.
 	const resolvedMatches = matches.map((match) => ({ ...match }));
 	const matchById = new Map(resolvedMatches.map((match) => [match.id, match]));
 
@@ -719,15 +740,11 @@ function resolveRound32TeamsForDisplay(
 		const slot = matchById.get(matchId);
 		if (!slot) continue;
 
-		const teamA = isGroupPositionResolved(standings, matches, def.aGroup, def.aPos)
-			? teamAt(standings, def.aGroup, def.aPos)
-			: null;
+		const teamA = resolvedGroupPositionTeam(standings, matches, def.aGroup, def.aPos);
 		if (teamA) slot.teamA = teamA;
 
 		if (def.bGroup !== undefined && def.bPos !== undefined) {
-			const teamB = isGroupPositionResolved(standings, matches, def.bGroup, def.bPos)
-				? teamAt(standings, def.bGroup, def.bPos)
-				: null;
+			const teamB = resolvedGroupPositionTeam(standings, matches, def.bGroup, def.bPos);
 			if (teamB) slot.teamB = teamB;
 		}
 	}
@@ -736,9 +753,8 @@ function resolveRound32TeamsForDisplay(
 	for (const [matchId, group] of thirdAssignment) {
 		if (manualOverrideMatchIds.has(matchId)) continue;
 
-		if (!isGroupPositionResolved(standings, matches, group, 2)) continue;
 		const slot = matchById.get(matchId);
-		const team = teamAt(standings, group, 2);
+		const team = resolvedGroupPositionTeam(standings, matches, group, 2);
 		if (slot && team) slot.teamB = team;
 	}
 
@@ -927,10 +943,14 @@ export async function removeUserFromTournament(input: { userId: string; tourname
 	clearLeaderboardCache();
 }
 
+// El torneo se considera "bloqueado" para edición global SOLO cuando el admin lo bloqueó
+// explícitamente (state 'locked') o ya terminó ('finished'). El comienzo del torneo NO
+// bloquea todo el prode: cada partido se cierra por su cuenta 10 minutos antes de su
+// kickoff (ver savePrediction y canEditMatch). Así, con el prode desbloqueado el usuario
+// puede seguir cargando pronósticos de partidos que todavía no empezaron (p. ej. 16avos),
+// aunque la fase de grupos ya haya arrancado.
 async function isTournamentLocked(tournament: Tournament): Promise<boolean> {
-	if (tournament.state === 'locked' || tournament.state === 'finished') return true;
-	const start = new Date(tournament.startAt).getTime();
-	return Number.isFinite(start) && Date.now() >= start;
+	return tournament.state === 'locked' || tournament.state === 'finished';
 }
 
 export async function listMatches(tournamentId: string): Promise<Match[]> {
@@ -979,16 +999,8 @@ export async function getProgressiveR32Classifiers(
 	const standings = await buildGroupStandings(sourceId);
 	const result: Record<string, { A?: string; B?: string }> = {};
 
-	const groupFullyPlayed = (group: string): boolean => {
-		const groupMatches = matches.filter((m) => m.stage === 'groups' && m.groupCode === group);
-		return groupMatches.length > 0 && groupMatches.every((m) => m.scoreA !== null && m.scoreB !== null);
-	};
-
-	const positionTeam = (group: string, position: number): string | null => {
-		if (!groupFullyPlayed(group)) return null;
-		if (!isGroupPositionResolved(standings, matches, group, position)) return null;
-		return teamAt(standings, group, position);
-	};
+	const positionTeam = (group: string, position: number): string | null =>
+		resolvedGroupPositionTeam(standings, matches, group, position);
 
 	for (const [matchId, def] of Object.entries(R32_DEFS)) {
 		const entry: { A?: string; B?: string } = {};
@@ -1688,9 +1700,12 @@ export async function getTournamentSettings(tournamentId: string): Promise<Tourn
 	// For ligas, settings come from the source (parent) tournament
 	const source = tournament.parentTournamentId ? await getTournamentById(tournament.parentTournamentId) : tournament;
 	if (!source) throw new Error('Competicion inexistente.');
-	const lockedByDate = source.state === 'open_predictions' && Date.now() >= new Date(source.startAt).getTime();
 	return {
-		state: lockedByDate ? 'locked' : source.state,
+		// Reportamos el estado real del torneo. El cierre por partido (10 min antes del
+		// kickoff) se maneja a nivel de cada partido y no marcando todo el torneo como
+		// 'locked' al arrancar; así "Desbloquear" desde el admin tiene efecto real y el
+		// badge refleja si el prode está realmente abierto.
+		state: source.state,
 		tournamentStartAt: source.startAt,
 		lockReason: source.lockReason
 	};

@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
 	import { rankThirdPlacedGroups } from '$lib/bracket-rules';
 	import { formatMatchDate as formatDate, formatMatchTime as formatTime } from '$lib/match-datetime';
 	import { getFlagUrl, VENUES } from '$lib/teams';
@@ -154,14 +153,15 @@
 	type TabKey = 'groups' | 'bracket' | 'thirds';
 	let stageTabs = $derived.by(() => {
 		const tabs: { key: TabKey; label: string; emoji: string; count: number; suffix: string }[] = [
-			{ key: 'groups', label: 'Grupos', emoji: '⚽', count: data.groupMatches?.length ?? 0, suffix: 'partidos' },
-			{ key: 'bracket', label: 'Llaves', emoji: '🏆', count: data.bracketMatches?.length ?? 0, suffix: 'partidos' }
+			{ key: 'bracket', label: 'Llaves', emoji: '🏆', count: data.bracketMatches?.length ?? 0, suffix: 'partidos' },
+			{ key: 'groups', label: 'Grupos', emoji: '⚽', count: data.groupMatches?.length ?? 0, suffix: 'partidos' }
 		];
 		if (hasGroupResults && thirdPlaceRanking.length > 0)
 			tabs.push({ key: 'thirds', label: 'Terceros', emoji: '🥉', count: thirdPlaceRanking.length, suffix: 'equipos' });
 		return tabs;
 	});
-	let activeTab = $state<TabKey>(untrack(() => shouldAutoScroll) ? 'bracket' : 'groups');
+	// "Llaves" es la pestaña por defecto: la fase de grupos pasó a segundo plano.
+	let activeTab = $state<TabKey>('bracket');
 </script>
 
 <svelte:head>

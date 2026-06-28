@@ -1,3 +1,8 @@
+<script module lang="ts">
+	// Flags are cached across mounts so re-opening the bracket tab is instant.
+	const flagCache = new Map<string, HTMLImageElement | null>();
+</script>
+
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import * as THREE from 'three';
@@ -160,10 +165,24 @@
 	const STAGE_SPAN: Record<string, number> = {};
 
 	// Mesh storage
-	let cardMeshes: { mesh: THREE.Mesh; shadow: THREE.Mesh; id: string; stage: string }[] = [];
+	let cardMeshes: { mesh: THREE.Mesh; shadow: THREE.Mesh; id: string; stage: string; delay: number; today: boolean }[] = [];
 	let basePositions = new Map<string, { baseX: number; y: number; z: number; baseY: number }>();
 	let connGroup = new THREE.Group();
-	let glowMesh: THREE.Mesh;
+	let glowMesh: THREE.Mesh | null = null;
+	let winnerCurves: THREE.CubicBezierCurve3[] = [];
+	let flowSprites: { sprite: THREE.Sprite; curve: THREE.CubicBezierCurve3; offset: number }[] = [];
+	let pulseMeshes: THREE.Mesh[] = [];
+	let contentGroup = new THREE.Group(); // holds everything rebuilt on resize
+
+	// Lifecycle / animation state
+	let destroyed = false;
+	let firstFrameAt = 0; // ms timestamp of first rendered frame (for entrance + flow)
+	const STAGE_INDEX: Record<string, number> = {
+		round32: 0, round16: 1, quarterfinal: 2, semifinal: 3, thirdplace: 4, final: 4
+	};
+	// Shared resources created once and reused across rebuilds
+	let dotTexture: THREE.CanvasTexture | null = null;
+	const flowTmp = new THREE.Vector3();
 
 	/** Camera distance so a whole stage column fits comfortably in the viewport */
 	function stageViewDist(stage: string): number {
@@ -361,28 +380,62 @@
 	}
 
 	async function loadFlag(name: string): Promise<HTMLImageElement | null> {
+		if (flagCache.has(name)) return flagCache.get(name) ?? null;
 		const url = getFlagUrl(name, 40);
-		if (!url) return null;
-		return new Promise(r => {
-			const img = new Image(); img.crossOrigin = 'anonymous';
-			img.onload = () => r(img); img.onerror = () => r(null); img.src = url;
+		if (!url) { flagCache.set(name, null); return null; }
+		const img = await new Promise<HTMLImageElement | null>((r) => {
+			const im = new Image(); im.crossOrigin = 'anonymous';
+			im.onload = () => r(im); im.onerror = () => r(null); im.src = url;
 		});
+		flagCache.set(name, img);
+		return img;
 	}
 
-	function createGlowTexture(): THREE.CanvasTexture {
+	function createGlowTexture(rgb = '245,158,11', peak = 0.5): THREE.CanvasTexture {
 		const c = document.createElement('canvas'); c.width = 256; c.height = 256;
 		const ctx = c.getContext('2d')!;
 		const g = ctx.createRadialGradient(128, 128, 0, 128, 128, 128);
-		g.addColorStop(0, 'rgba(245,158,11,0.5)'); g.addColorStop(0.5, 'rgba(245,158,11,0.12)'); g.addColorStop(1, 'rgba(245,158,11,0)');
+		g.addColorStop(0, `rgba(${rgb},${peak})`);
+		g.addColorStop(0.5, `rgba(${rgb},${peak * 0.24})`);
+		g.addColorStop(1, `rgba(${rgb},0)`);
 		ctx.fillStyle = g; ctx.fillRect(0, 0, 256, 256);
 		return new THREE.CanvasTexture(c);
 	}
 
+	/** Soft round dot used for the energy particles that travel along the bracket */
+	function getDotTexture(): THREE.CanvasTexture {
+		if (dotTexture) return dotTexture;
+		const c = document.createElement('canvas'); c.width = 64; c.height = 64;
+		const ctx = c.getContext('2d')!;
+		const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+		g.addColorStop(0, 'rgba(255,255,255,1)');
+		g.addColorStop(0.35, 'rgba(186,230,253,0.95)');
+		g.addColorStop(1, 'rgba(125,211,252,0)');
+		ctx.fillStyle = g; ctx.fillRect(0, 0, 64, 64);
+		dotTexture = new THREE.CanvasTexture(c);
+		return dotTexture;
+	}
+
+	/** Vertical gradient backdrop for depth — modern, soft, light */
+	function createBackgroundTexture(): THREE.CanvasTexture {
+		const c = document.createElement('canvas'); c.width = 16; c.height = 256;
+		const ctx = c.getContext('2d')!;
+		const g = ctx.createLinearGradient(0, 0, 0, 256);
+		g.addColorStop(0, '#eef4fb');
+		g.addColorStop(0.55, '#e7eef8');
+		g.addColorStop(1, '#dde7f4');
+		ctx.fillStyle = g; ctx.fillRect(0, 0, 16, 256);
+		const tex = new THREE.CanvasTexture(c);
+		tex.colorSpace = THREE.SRGBColorSpace;
+		return tex;
+	}
+
 	// ── Build connectors as a static tree (positions never change at runtime) ──
+	// Winner paths use a per-stage colour gradient; the curves are kept so the
+	// energy particles can travel along exactly the same lines.
 	function rebuildConnectors() {
-		if (connGroup) scene.remove(connGroup);
 		connGroup = new THREE.Group();
-		const mat = new THREE.LineBasicMaterial({ color: 0x64748b, transparent: true, opacity: 0.5 });
+		winnerCurves = [];
 
 		for (const [fromId, toId] of WINNER_CONNS) {
 			const fb = basePositions.get(fromId), tb = basePositions.get(toId);
@@ -400,10 +453,22 @@
 				new THREE.Vector3(en - d * 50, tb.baseY, zM * 0.3 + tb.z * 0.7),
 				new THREE.Vector3(en, tb.baseY, tb.z)
 			);
-			connGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(curve.getPoints(24)), mat));
+			winnerCurves.push(curve);
+
+			const pts = curve.getPoints(28);
+			const geo = new THREE.BufferGeometry().setFromPoints(pts);
+			const cFrom = new THREE.Color(CARD_STAGE_CLR[stageOf(fromId)] ?? '#64748b');
+			const cTo = new THREE.Color(CARD_STAGE_CLR[stageOf(toId)] ?? '#64748b');
+			const colors = new Float32Array(pts.length * 3);
+			for (let i = 0; i < pts.length; i++) {
+				const c = cFrom.clone().lerp(cTo, i / (pts.length - 1));
+				colors[i * 3] = c.r; colors[i * 3 + 1] = c.g; colors[i * 3 + 2] = c.b;
+			}
+			geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+			const mat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.6 });
+			connGroup.add(new THREE.Line(geo, mat));
 		}
 
-		const dMat = new THREE.LineDashedMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.3, dashSize: 8, gapSize: 6 });
 		for (const [fromId, toId] of LOSER_CONNS) {
 			const fb = basePositions.get(fromId), tb = basePositions.get(toId);
 			if (!fb || !tb) continue;
@@ -412,11 +477,54 @@
 				new THREE.Vector3(fb.baseX + (isL ? CARD_W / 2 : -CARD_W / 2), fb.baseY, fb.z),
 				new THREE.Vector3(tb.baseX, tb.baseY, tb.z)
 			];
+			const dMat = new THREE.LineDashedMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.3, dashSize: 8, gapSize: 6 });
 			const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), dMat);
 			l.computeLineDistances();
 			connGroup.add(l);
 		}
-		scene.add(connGroup);
+		contentGroup.add(connGroup);
+	}
+
+	/** Energy particles that flow along each winner path toward the next round */
+	function buildFlowSprites() {
+		const tex = getDotTexture();
+		winnerCurves.forEach((curve, i) => {
+			const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, opacity: 0 });
+			const sprite = new THREE.Sprite(mat);
+			const s = Math.max(10, CARD_H * 0.42);
+			sprite.scale.set(s, s, 1);
+			sprite.renderOrder = 3;
+			contentGroup.add(sprite);
+			flowSprites.push({ sprite, curve, offset: (i * 0.1367) % 1 });
+		});
+	}
+
+	/** Dispose every geometry/material/texture under an object (shared dot tex kept) */
+	function disposeObject3D(obj: THREE.Object3D) {
+		obj.traverse((o) => {
+			const any = o as unknown as { geometry?: THREE.BufferGeometry; material?: THREE.Material | THREE.Material[] };
+			any.geometry?.dispose();
+			if (any.material) {
+				const mats = Array.isArray(any.material) ? any.material : [any.material];
+				for (const m of mats) {
+					const map = (m as THREE.MeshBasicMaterial).map;
+					if (map && map !== dotTexture) map.dispose();
+					m.dispose();
+				}
+			}
+		});
+	}
+
+	/** Remove + dispose all rebuildable content (cards, connectors, glow, particles) */
+	function disposeContent() {
+		for (const child of [...contentGroup.children]) {
+			contentGroup.remove(child);
+			disposeObject3D(child);
+		}
+		cardMeshes = [];
+		flowSprites = [];
+		pulseMeshes = [];
+		glowMesh = null;
 	}
 
 	function getCamZ(): number {
@@ -436,66 +544,108 @@
 		return closest;
 	}
 
-	async function buildScene() {
-		if (!container) return;
-		const w = container.clientWidth, h = container.clientHeight;
+	function setCardSize(w: number) {
 		CARD_W = Math.max(170, Math.min(280, w * 0.22));
 		CARD_H = CARD_W * 0.35;
+	}
+
+	/** (Re)build everything that depends on card size / positions. Safe to re-run on resize. */
+	function buildContent() {
+		disposeContent();
+
+		const bracketMatches = matches.filter((m) => m.stage !== 'groups');
+		const started = firstFrameAt > 0; // skip the entrance animation on rebuilds (resize)
+
+		for (const m of bracketMatches) {
+			const bp = basePositions.get(m.id);
+			if (!bp) continue;
+			const today = isToday(m.kickoffAt);
+
+			// Soft drop shadow
+			const sMesh = new THREE.Mesh(
+				new THREE.PlaneGeometry(CARD_W + 4, CARD_H + 4),
+				new THREE.MeshBasicMaterial({ color: 0x0f172a, transparent: true, opacity: started ? 0.05 : 0, depthWrite: false })
+			);
+			sMesh.position.set(bp.baseX + 3, bp.y - 3, bp.z - 1);
+			contentGroup.add(sMesh);
+
+			// Pulsing halo behind matches played today
+			if (today) {
+				const halo = new THREE.Mesh(
+					new THREE.PlaneGeometry(CARD_W * 1.6, CARD_H * 2.4),
+					new THREE.MeshBasicMaterial({ map: createGlowTexture('239,68,68', 0.6), transparent: true, depthWrite: false, opacity: 0 })
+				);
+				halo.position.set(bp.baseX, bp.y, bp.z - 2);
+				halo.userData.base = { x: bp.baseX, y: bp.y };
+				contentGroup.add(halo);
+				pulseMeshes.push(halo);
+			}
+
+			// The card itself
+			const tex = createCardTexture(m, flagCache.get(m.teamA) ?? null, flagCache.get(m.teamB) ?? null);
+			const mesh = new THREE.Mesh(
+				new THREE.PlaneGeometry(CARD_W, CARD_H),
+				new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide, depthWrite: false, opacity: started ? 1 : 0 })
+			);
+			mesh.position.set(bp.baseX, bp.y, bp.z);
+			mesh.renderOrder = 2;
+			contentGroup.add(mesh);
+
+			const delay = (STAGE_INDEX[m.stage] ?? 0) * 110;
+			cardMeshes.push({ mesh, shadow: sMesh, id: m.id, stage: m.stage, delay, today });
+		}
+
+		// Trophy glow behind the final
+		const fb = basePositions.get('final');
+		if (fb) {
+			glowMesh = new THREE.Mesh(
+				new THREE.PlaneGeometry(CARD_W * 3, CARD_H * 5),
+				new THREE.MeshBasicMaterial({ map: createGlowTexture('245,158,11', 0.55), transparent: true, depthWrite: false, opacity: started ? 1 : 0 })
+			);
+			glowMesh.position.set(0, fb.y, fb.z - 8);
+			contentGroup.add(glowMesh);
+		}
+
+		rebuildConnectors();
+		buildFlowSprites();
+	}
+
+	async function buildScene() {
+		if (!container || destroyed) return;
+		const w = container.clientWidth, h = container.clientHeight;
+		setCardSize(w);
 		computeBasePositions(w, h);
 
 		renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
 		renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 		renderer.setSize(w, h);
-		renderer.setClearColor(0xf0f4f8);
+		renderer.outputColorSpace = THREE.SRGBColorSpace;
 		container.appendChild(renderer.domElement);
 
 		scene = new THREE.Scene();
-		scene.background = new THREE.Color(0xf0f4f8);
-		scene.fog = new THREE.Fog(0xf0f4f8, initialCamZ * 0.6, initialCamZ + 1200);
+		scene.background = createBackgroundTexture();
+		scene.fog = new THREE.Fog(0xe7eef8, initialCamZ * 0.6, initialCamZ + 1200);
 
 		camera = new THREE.PerspectiveCamera(FOV_DEG, w / h, 10, initialCamZ + 2500);
-		scene.add(new THREE.AmbientLight(0xffffff, 1));
 
-		const bracketMatches = matches.filter(m => m.stage !== 'groups');
-		const teams = new Set<string>();
-		for (const m of bracketMatches) { teams.add(m.teamA); teams.add(m.teamB); }
-		const flags = new Map<string, HTMLImageElement | null>();
-		await Promise.all([...teams].map(async t => { flags.set(t, await loadFlag(t)); }));
-
-		for (const m of bracketMatches) {
-			const bp = basePositions.get(m.id);
-			if (!bp) continue;
-			const tex = createCardTexture(m, flags.get(m.teamA) ?? null, flags.get(m.teamB) ?? null);
-			const geo = new THREE.PlaneGeometry(CARD_W, CARD_H);
-			const mt = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide });
-			const mesh = new THREE.Mesh(geo, mt);
-			mesh.position.set(bp.baseX, bp.y, bp.z);
-			scene.add(mesh);
-			const sGeo = new THREE.PlaneGeometry(CARD_W + 3, CARD_H + 3);
-			const sMt = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.04 });
-			const sMesh = new THREE.Mesh(sGeo, sMt);
-			sMesh.position.set(bp.baseX + 2, bp.y - 2, bp.z - 1);
-			scene.add(sMesh);
-			cardMeshes.push({ mesh, shadow: sMesh, id: m.id, stage: m.stage });
-		}
-
-		const fb = basePositions.get('final');
-		if (fb) {
-			const gg = new THREE.PlaneGeometry(CARD_W * 3, CARD_H * 5);
-			const gm = new THREE.MeshBasicMaterial({ map: createGlowTexture(), transparent: true });
-			glowMesh = new THREE.Mesh(gg, gm);
-			glowMesh.position.set(0, fb.y, fb.z - 8);
-			scene.add(glowMesh);
-		}
-
-		rebuildConnectors();
-
-		const gridGeo = new THREE.PlaneGeometry(3000, 2400, 30, 24);
-		const gridMat = new THREE.MeshBasicMaterial({ color: 0xcbd5e1, wireframe: true, transparent: true, opacity: 0.04 });
-		const grid = new THREE.Mesh(gridGeo, gridMat);
+		// Static ground grid (does not depend on card size)
+		const grid = new THREE.Mesh(
+			new THREE.PlaneGeometry(4200, 3000, 32, 24),
+			new THREE.MeshBasicMaterial({ color: 0x94a3b8, wireframe: true, transparent: true, opacity: 0.05 })
+		);
 		grid.rotation.x = -Math.PI / 2;
 		grid.position.set(0, -400, -700);
 		scene.add(grid);
+		scene.add(contentGroup);
+
+		// Preload flags (cached across mounts), then build the size-dependent content
+		const bracketMatches = matches.filter((m) => m.stage !== 'groups');
+		const teams = new Set<string>();
+		for (const m of bracketMatches) { teams.add(m.teamA); teams.add(m.teamB); }
+		await Promise.all([...teams].map((t) => loadFlag(t)));
+		if (destroyed) return;
+
+		buildContent();
 
 		if (onAutoScroll) {
 			const now = new Date();
@@ -512,9 +662,16 @@
 		animate();
 	}
 
+	const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
+
 	function animate() {
+		if (destroyed) return;
 		animId = requestAnimationFrame(animate);
-		if (!container) return;
+		if (!container || !renderer || !scene || !camera) return;
+
+		const now = performance.now();
+		if (!firstFrameAt) firstFrameAt = now;
+		const elapsed = now - firstFrameAt;
 
 		zoomT += (targetZoomT - zoomT) * 0.065;
 		panX += (targetPanX - panX) * 0.08;
@@ -524,7 +681,33 @@
 
 		const camZ = getCamZ();
 
-		// Card / connector positions are a static tree — only the camera moves.
+		// Entrance: cards fade + scale in, staggered front → back
+		for (const c of cardMeshes) {
+			const a = easeOut(Math.max(0, Math.min(1, (elapsed - c.delay) / 650)));
+			const mat = c.mesh.material as THREE.MeshBasicMaterial;
+			mat.opacity = a;
+			c.mesh.scale.setScalar(0.9 + 0.1 * a);
+			(c.shadow.material as THREE.MeshBasicMaterial).opacity = 0.05 * a;
+		}
+		const globalIn = easeOut(Math.max(0, Math.min(1, (elapsed - 250) / 800)));
+		if (glowMesh) (glowMesh.material as THREE.MeshBasicMaterial).opacity = globalIn * (0.85 + 0.15 * Math.sin(elapsed * 0.0022));
+
+		// Today halos pulse
+		for (const halo of pulseMeshes) {
+			const p = 0.5 + 0.5 * Math.sin(elapsed * 0.005);
+			(halo.material as THREE.MeshBasicMaterial).opacity = globalIn * (0.22 + 0.3 * p);
+			halo.scale.setScalar(0.97 + 0.1 * p);
+		}
+
+		// Energy particles flow along the winner paths toward the next round
+		for (const f of flowSprites) {
+			const t = ((elapsed * 0.00014 + f.offset) % 1 + 1) % 1;
+			f.curve.getPoint(t, flowTmp);
+			f.sprite.position.copy(flowTmp);
+			(f.sprite.material as THREE.SpriteMaterial).opacity = globalIn * Math.sin(Math.PI * t) * 0.85;
+		}
+
+		// Depth fog tightens as you push toward the final
 		if (scene.fog instanceof THREE.Fog) {
 			scene.fog.near = initialCamZ * 0.5 + zoomT * initialCamZ * 0.4;
 			scene.fog.far = initialCamZ + 800 + zoomT * 600;
@@ -590,12 +773,20 @@
 			// pinch ended, allow single-finger drag again
 		}
 	}
+	let resizeTimer: ReturnType<typeof setTimeout> | null = null;
 	function onResize() {
 		if (!renderer || !container || !camera) return;
 		const w = container.clientWidth, h = container.clientHeight;
 		renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
-		CARD_W = Math.max(170, Math.min(280, w * 0.22)); CARD_H = CARD_W * 0.35;
-		computeBasePositions(w, h);
+		// Debounce the (heavier) content rebuild so dragging a desktop window stays smooth
+		if (resizeTimer) clearTimeout(resizeTimer);
+		resizeTimer = setTimeout(() => {
+			if (destroyed || !container) return;
+			setCardSize(container.clientWidth);
+			computeBasePositions(container.clientWidth, container.clientHeight);
+			camera.far = initialCamZ + 2500; camera.updateProjectionMatrix();
+			buildContent();
+		}, 150);
 	}
 	function onDeviceOrientation(e: DeviceOrientationEvent) {
 		if (e.beta === null || e.gamma === null) return;
@@ -621,10 +812,23 @@
 
 	onMount(() => { buildScene(); window.addEventListener('resize', onResize); requestGyro(); });
 	onDestroy(() => {
+		// onDestroy also runs during SSR teardown — bail out when there's no browser.
+		if (typeof window === 'undefined') return;
+		destroyed = true;
 		if (animId) cancelAnimationFrame(animId);
-		if (renderer) { renderer.dispose(); renderer.domElement.remove(); }
+		if (resizeTimer) clearTimeout(resizeTimer);
 		window.removeEventListener('resize', onResize);
 		window.removeEventListener('deviceorientation', onDeviceOrientation);
+		if (scene) {
+			if (scene.background instanceof THREE.Texture) scene.background.dispose();
+			disposeObject3D(scene);
+		}
+		if (dotTexture) { dotTexture.dispose(); dotTexture = null; }
+		if (renderer) {
+			renderer.dispose();
+			renderer.forceContextLoss?.();
+			renderer.domElement.remove();
+		}
 	});
 </script>
 

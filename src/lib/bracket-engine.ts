@@ -5,6 +5,7 @@
  */
 import type { Match, GroupStandingRow, SideWinner } from '$lib/types';
 import { FLOW, R32_DEFS, resolveBestThirds, resolveWinner, sortGroupStandingRows, teamAt } from '$lib/bracket-rules';
+import { getTeamId } from '$lib/teams';
 
 export interface LivePred {
 	predA: number | null;
@@ -279,4 +280,112 @@ export function buildBracket(
 	}
 
 	return bracket;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Bracket accuracy (prediction vs. reality, with forward propagation) */
+/* ------------------------------------------------------------------ */
+
+export type SideAccuracy = 'pending' | 'hit' | 'miss';
+
+export interface BracketAccuracy {
+	a: SideAccuracy;
+	b: SideAccuracy;
+	/** Ambos lados resueltos y errados → llave muerta (sin chances de sumar). */
+	dead: boolean;
+	/** Equipo real que ocupa cada lado, si ya se conoce. */
+	realA?: string;
+	realB?: string;
+}
+
+/**
+ * Para cada cruce de eliminación directa indica si los equipos pronosticados coinciden con la
+ * realidad (`hit`), ya no pueden coincidir (`miss`) o todavía no se sabe (`pending`).
+ *
+ * Un lado es `miss` cuando: (a) ya se conoce el equipo real y no es el pronosticado, (b) el
+ * equipo pronosticado quedó eliminado de la realidad, o (c) **propagación**: ese equipo ya
+ * había errado en su cruce de origen (no es el que realmente avanza). La propagación arrastra
+ * el error hacia 8vos, 4tos, etc. aunque el equipo siga vivo en otra zona del cuadro y el
+ * casillero real de la ronda siguiente todavía no se conozca: si una llave queda muerta en
+ * 16avos, no hay equipo que pase, así que los casilleros que dependen de ella también se marcan.
+ */
+export function calcBracketAccuracy(
+	matches: Match[],
+	bracket: Record<string, BracketSlot>,
+	progressiveR32: Record<string, { A?: string; B?: string }>,
+	eliminatedTeams: string[]
+): Record<string, BracketAccuracy> {
+	const realTeamIds = new Set<string>();
+	for (const m of matches) {
+		if (m.stage !== 'groups') continue;
+		realTeamIds.add(getTeamId(m.teamA));
+		realTeamIds.add(getTeamId(m.teamB));
+	}
+	const eliminatedSet = new Set(eliminatedTeams.map((t) => getTeamId(t)));
+
+	// Equipo real ya definido para cada lado del cruce.
+	// 16avos: resolución progresiva del servidor. Rondas siguientes: surge del cruce previo ya jugado.
+	const realSlot = (match: Match): { A?: string; B?: string } => {
+		if (match.stage === 'round32') return progressiveR32[match.id] ?? {};
+		const out: { A?: string; B?: string } = {};
+		if (realTeamIds.has(getTeamId(match.teamA))) out.A = match.teamA;
+		if (realTeamIds.has(getTeamId(match.teamB))) out.B = match.teamB;
+		return out;
+	};
+
+	const sideAccuracy = (
+		realTeam: string | undefined,
+		predTeam: string | undefined,
+		predResolved: boolean
+	): SideAccuracy => {
+		if (!predResolved || !predTeam) return 'pending';
+		if (realTeam) return getTeamId(predTeam) === getTeamId(realTeam) ? 'hit' : 'miss';
+		if (eliminatedSet.has(getTeamId(predTeam))) return 'miss';
+		return 'pending';
+	};
+
+	// Inverso de FLOW: a qué casillero (`matchId:side`) alimenta el ganador/perdedor de cada cruce.
+	const feederOf = new Map<string, string>();
+	for (const [fromId, flow] of Object.entries(FLOW)) {
+		feederOf.set(`${flow.w[0]}:${flow.w[1]}`, fromId);
+		if (flow.l) feederOf.set(`${flow.l[0]}:${flow.l[1]}`, fromId);
+	}
+
+	const result: Record<string, BracketAccuracy> = {};
+
+	// Precisión de un equipo dentro de un cruce ya calculado, según el lado que ocupa.
+	const teamAccuracyInMatch = (matchId: string, team: string): SideAccuracy | null => {
+		const acc = result[matchId];
+		const slot = bracket[matchId];
+		if (!acc || !slot) return null;
+		if (getTeamId(slot.teamA) === getTeamId(team)) return acc.a;
+		if (getTeamId(slot.teamB) === getTeamId(team)) return acc.b;
+		return null;
+	};
+
+	// Orden cronológico: así cada cruce ya tiene calculado el cruce que lo alimenta.
+	const knockout = matches
+		.filter((m) => m.stage !== 'groups')
+		.sort((a, b) => a.kickoffAt.localeCompare(b.kickoffAt));
+
+	for (const match of knockout) {
+		const slot = bracket[match.id];
+		const real = realSlot(match);
+		let a = sideAccuracy(real.A, slot?.teamA, !!slot?.autoA);
+		let b = sideAccuracy(real.B, slot?.teamB, !!slot?.autoB);
+
+		// Propagación del "miss" desde el cruce de origen.
+		if (a === 'pending' && slot?.teamA) {
+			const fromId = feederOf.get(`${match.id}:A`);
+			if (fromId && teamAccuracyInMatch(fromId, slot.teamA) === 'miss') a = 'miss';
+		}
+		if (b === 'pending' && slot?.teamB) {
+			const fromId = feederOf.get(`${match.id}:B`);
+			if (fromId && teamAccuracyInMatch(fromId, slot.teamB) === 'miss') b = 'miss';
+		}
+
+		result[match.id] = { a, b, dead: a === 'miss' && b === 'miss', realA: real.A, realB: real.B };
+	}
+
+	return result;
 }

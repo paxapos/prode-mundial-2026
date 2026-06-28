@@ -4,8 +4,8 @@
 	import { page } from '$app/stores';
 	import { Badge } from 'flowbite-svelte';
 	const ogImage = $derived(`${$page.url.origin}/og-image.jpg`);
-	import { getFlagUrl, GROUPS, VENUES, getTeamId } from '$lib/teams';
-	import { calcStandings, buildBracket, calcGroupPositionAccuracy, type LivePred, type BracketSlot } from '$lib/bracket-engine';
+	import { getFlagUrl, GROUPS, VENUES } from '$lib/teams';
+	import { calcStandings, buildBracket, calcGroupPositionAccuracy, calcBracketAccuracy, type LivePred, type BracketAccuracy } from '$lib/bracket-engine';
 	import { rankThirdPlacedGroups } from '$lib/bracket-rules';
 	import { formatMatchDate as formatDateShort, formatMatchTime as formatTime } from '$lib/match-datetime';
 	import { STAGE_LABELS } from '$lib/scoring-config';
@@ -48,48 +48,13 @@
 	const bracket = $derived(buildBracket(data.matches, preds));
 
 	/* ─── Aciertos del bracket (pronóstico vs. equipos reales) ─── */
-	const realTeamIds = $derived.by(() => {
-		const set = new Set<string>();
-		for (const m of data.matches) {
-			if (m.stage !== 'groups') continue;
-			set.add(getTeamId(m.teamA));
-			set.add(getTeamId(m.teamB));
-		}
-		return set;
-	});
-	// Equipos eliminados de la realidad: no pueden ocupar ningún casillero futuro.
-	const eliminatedSet = $derived(new Set((data.eliminatedTeams ?? []).map((t: string) => getTeamId(t))));
-
-	type SideAccuracy = 'pending' | 'hit' | 'miss';
-	interface BracketAccuracy {
-		a: SideAccuracy;
-		b: SideAccuracy;
-		dead: boolean;
-		realA?: string;
-		realB?: string;
-	}
-
-	function realSlot(match: Match): { A?: string; B?: string } {
-		if (match.stage === 'round32') return data.progressiveR32?.[match.id] ?? {};
-		const out: { A?: string; B?: string } = {};
-		if (realTeamIds.has(getTeamId(match.teamA))) out.A = match.teamA;
-		if (realTeamIds.has(getTeamId(match.teamB))) out.B = match.teamB;
-		return out;
-	}
-
-	function sideAccuracy(realTeam: string | undefined, predTeam: string | undefined, predResolved: boolean): SideAccuracy {
-		if (!predResolved || !predTeam) return 'pending';
-		if (realTeam) return getTeamId(predTeam) === getTeamId(realTeam) ? 'hit' : 'miss';
-		if (eliminatedSet.has(getTeamId(predTeam))) return 'miss';
-		return 'pending';
-	}
-
-	function bracketAccuracy(match: Match, slot: BracketSlot | undefined): BracketAccuracy {
-		const real = realSlot(match);
-		const a = sideAccuracy(real.A, slot?.teamA, !!slot?.autoA);
-		const b = sideAccuracy(real.B, slot?.teamB, !!slot?.autoB);
-		return { a, b, dead: a === 'miss' && b === 'miss', realA: real.A, realB: real.B };
-	}
+	// Precisión por cruce, con propagación hacia adelante: un equipo que erró en su cruce de
+	// origen arrastra el error a 8vos, 4tos, etc. (una llave muerta en 16avos no deja equipos
+	// que pasen, así que los casilleros que dependen de ella también quedan marcados).
+	const EMPTY_ACC: BracketAccuracy = { a: 'pending', b: 'pending', dead: false };
+	const bracketAcc = $derived(
+		calcBracketAccuracy(data.matches, bracket, data.progressiveR32 ?? {}, data.eliminatedTeams ?? [])
+	);
 
 	// Resumen de aciertos de las llaves de 16avos (16 cruces, 32 clasificados).
 	const bracketSummary = $derived.by(() => {
@@ -100,7 +65,7 @@
 		let crossesDecided = 0;
 		let dead = 0;
 		for (const m of r32) {
-			const acc = bracketAccuracy(m, bracket[m.id]);
+			const acc = bracketAcc[m.id] ?? EMPTY_ACC;
 			const aDecided = acc.a !== 'pending';
 			const bDecided = acc.b !== 'pending';
 			if (aDecided) { slotsDecided++; if (acc.a === 'hit') slotsHit++; }
@@ -824,7 +789,7 @@
 					{@const matchCanEdit = canEditMatch(match)}
 					{@const isFinalMatch = match.id === 'final'}
 					{@const is3rd = match.id === '3rd'}
-					{@const acc = bracketAccuracy(match, slot)}
+					{@const acc = bracketAcc[match.id] ?? EMPTY_ACC}
 					<div
 						class="card-3d overflow-hidden rounded-2xl border shadow-lg transition-all duration-300
 						{acc.dead

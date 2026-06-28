@@ -2,8 +2,8 @@
 	import { untrack } from 'svelte';
 	import { deserialize } from '$app/forms';
 	import { Badge } from 'flowbite-svelte';
-	import { getFlagUrl, GROUPS, VENUES, getTeamId } from '$lib/teams';
-	import { calcStandings, buildBracket, calcGroupPositionAccuracy, type LivePred, type BracketSlot } from '$lib/bracket-engine';
+	import { getFlagUrl, GROUPS, VENUES } from '$lib/teams';
+	import { calcStandings, buildBracket, calcGroupPositionAccuracy, calcBracketAccuracy, type LivePred, type BracketAccuracy } from '$lib/bracket-engine';
 	import { rankThirdPlacedGroups } from '$lib/bracket-rules';
 	import { formatMatchDate as formatDateShort, formatMatchTime as formatTime } from '$lib/match-datetime';
 	import { STAGE_LABELS } from '$lib/scoring-config';
@@ -68,60 +68,13 @@ import type { Match } from '$lib/types';
 	});
 
 	/* ─── Aciertos del bracket (pronóstico vs. equipos reales) ─── */
-	// Set de ids de los 48 equipos reales (los que aparecen en partidos de grupos).
-	const realTeamIds = $derived.by(() => {
-		const set = new Set<string>();
-		for (const m of data.matches) {
-			if (m.stage !== 'groups') continue;
-			set.add(getTeamId(m.teamA));
-			set.add(getTeamId(m.teamB));
-		}
-		return set;
-	});
-
-	// Equipos que ya quedaron eliminados de la realidad: no pueden ocupar ningún casillero
-	// de ahí en adelante, así que si los pronostiqué quedan en gris en todas las fases.
-	const eliminatedSet = $derived(new Set((data.eliminatedTeams ?? []).map((t: string) => getTeamId(t))));
-
-	type SideAccuracy = 'pending' | 'hit' | 'miss';
-	interface BracketAccuracy {
-		a: SideAccuracy;
-		b: SideAccuracy;
-		/** Ambos casilleros resueltos y ambos errados → llave muerta (sin chances de sumar). */
-		dead: boolean;
-		/** Nombre del equipo real que pasó, si ya se conoce ese casillero. */
-		realA?: string;
-		realB?: string;
-	}
-
-	// Equipo real ya definido para cada lado del cruce.
-	// 16avos: resolución progresiva del servidor (apenas cierra cada grupo, con desempates).
-	// Rondas siguientes: el equipo real surge del resultado del cruce previo, ya reflejado
-	// en match.teamA/teamB una vez jugado ese partido.
-	function realSlot(match: Match): { A?: string; B?: string } {
-		if (match.stage === 'round32') return data.progressiveR32?.[match.id] ?? {};
-		const out: { A?: string; B?: string } = {};
-		if (realTeamIds.has(getTeamId(match.teamA))) out.A = match.teamA;
-		if (realTeamIds.has(getTeamId(match.teamB))) out.B = match.teamB;
-		return out;
-	}
-
-	// Un casillero se marca cuando: (a) ya se conoce el equipo real de ese lado, o
-	// (b) el equipo que pronostiqué quedó eliminado y no puede llegar acá de ningún modo.
-	// Si todavía hay dudas, queda 'pending' (no se marca).
-	function sideAccuracy(realTeam: string | undefined, predTeam: string | undefined, predResolved: boolean): SideAccuracy {
-		if (!predResolved || !predTeam) return 'pending';
-		if (realTeam) return getTeamId(predTeam) === getTeamId(realTeam) ? 'hit' : 'miss';
-		if (eliminatedSet.has(getTeamId(predTeam))) return 'miss';
-		return 'pending';
-	}
-
-	function bracketAccuracy(match: Match, slot: BracketSlot | undefined): BracketAccuracy {
-		const real = realSlot(match);
-		const a = sideAccuracy(real.A, slot?.teamA, !!slot?.autoA);
-		const b = sideAccuracy(real.B, slot?.teamB, !!slot?.autoB);
-		return { a, b, dead: a === 'miss' && b === 'miss', realA: real.A, realB: real.B };
-	}
+	// Precisión por cruce, con propagación hacia adelante: un equipo que erró en su cruce de
+	// origen arrastra el error a 8vos, 4tos, etc. (una llave muerta en 16avos no deja equipos
+	// que pasen, así que los casilleros que dependen de ella también quedan marcados).
+	const EMPTY_ACC: BracketAccuracy = { a: 'pending', b: 'pending', dead: false };
+	const bracketAcc = $derived(
+		calcBracketAccuracy(data.matches, bracket, data.progressiveR32 ?? {}, data.eliminatedTeams ?? [])
+	);
 
 	// Resumen de aciertos de las llaves de 16avos (16 cruces, 32 clasificados).
 	const bracketSummary = $derived.by(() => {
@@ -132,7 +85,7 @@ import type { Match } from '$lib/types';
 		let crossesPerfect = 0;
 		let dead = 0;
 		for (const m of r32) {
-			const acc = bracketAccuracy(m, bracket[m.id]);
+			const acc = bracketAcc[m.id] ?? EMPTY_ACC;
 			const aDecided = acc.a !== 'pending';
 			const bDecided = acc.b !== 'pending';
 			if (aDecided) { slotsDecided++; if (acc.a === 'hit') slotsHit++; }
@@ -627,7 +580,7 @@ import type { Match } from '$lib/types';
 					{@const matchCanEdit = canEditMatch(match)}
 					{@const isFinalMatch = match.id === 'final'}
 					{@const is3rd = match.id === '3rd'}
-					{@const acc = bracketAccuracy(match, slot)}
+					{@const acc = bracketAcc[match.id] ?? EMPTY_ACC}
 					<div
 						class="card-3d overflow-hidden rounded-2xl border shadow-lg transition-all duration-300
 						{acc.dead

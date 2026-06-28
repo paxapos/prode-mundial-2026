@@ -149,19 +149,26 @@
 		setTimeout(() => bracketSection?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 400);
 	});
 
-	// Stage tabs navigation
-	const STAGE_TABS = [
-		{ key: 'groups', label: 'Grupos', emoji: '⚽' },
-		{ key: 'bracket', label: 'Llaves', emoji: '🏆' }
-	] as const;
-	let activeTab = $state<'groups' | 'bracket'>(untrack(() => shouldAutoScroll) ? 'bracket' : 'groups');
+	// Stage tabs navigation. La pestaña de Terceros aparece solo mientras es útil
+	// (hay resultados de grupos). Una vez iniciadas las llaves, "Llaves" queda activa.
+	type TabKey = 'groups' | 'bracket' | 'thirds';
+	let stageTabs = $derived.by(() => {
+		const tabs: { key: TabKey; label: string; emoji: string; count: number; suffix: string }[] = [
+			{ key: 'groups', label: 'Grupos', emoji: '⚽', count: data.groupMatches?.length ?? 0, suffix: 'partidos' },
+			{ key: 'bracket', label: 'Llaves', emoji: '🏆', count: data.bracketMatches?.length ?? 0, suffix: 'partidos' }
+		];
+		if (hasGroupResults && thirdPlaceRanking.length > 0)
+			tabs.push({ key: 'thirds', label: 'Terceros', emoji: '🥉', count: thirdPlaceRanking.length, suffix: 'equipos' });
+		return tabs;
+	});
+	let activeTab = $state<TabKey>(untrack(() => shouldAutoScroll) ? 'bracket' : 'groups');
 </script>
 
 <svelte:head>
 	<title>Home | Prode Mundial 2026</title>
 </svelte:head>
 
-<section class="space-y-8">
+<section class="flex flex-col gap-8">
 	<!-- Hero -->
 	{#if data.tournament}
 		<div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-800 to-slate-950 p-6 text-white shadow-lg md:p-10">
@@ -197,8 +204,8 @@
 		</div>
 	{/if}
 
-	<!-- PRÓXIMOS PARTIDOS Y CALENDARIO -->
-	<div class="space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+	<!-- PRÓXIMOS PARTIDOS Y CALENDARIO — al final: la fecha/hora ya se ve en las llaves -->
+	<div class="order-last space-y-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
 		<!-- Section Header -->
 		<div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
 			<div class="flex items-center gap-3">
@@ -344,9 +351,9 @@
 	</div>
 
 
-	<!-- Tabla de mejores terceros -->
-	{#if hasGroupResults && thirdPlaceRanking.length > 0}
-		<div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+	<!-- Tabla de mejores terceros (pestaña Terceros) -->
+	{#if activeTab === 'thirds' && hasGroupResults && thirdPlaceRanking.length > 0}
+		<div class="order-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 			<div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-5 py-4">
 				<div class="flex items-center gap-3">
 					<span class="text-2xl">🥉</span>
@@ -405,17 +412,13 @@
 
 	<!-- Tab navigation -->
 	<div class="flex gap-2 rounded-xl bg-slate-100 p-1">
-		{#each STAGE_TABS as tab}
+		{#each stageTabs as tab}
 			<button
 				onclick={() => { activeTab = tab.key; }}
 				class="flex-1 rounded-lg px-4 py-2.5 text-sm font-bold transition-all {activeTab === tab.key ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}"
 			>
 				{tab.emoji} {tab.label}
-				{#if tab.key === 'groups'}
-					<span class="ml-1 text-xs font-normal text-slate-400">{data.groupMatches?.length ?? 0} partidos</span>
-				{:else}
-					<span class="ml-1 text-xs font-normal text-slate-400">{data.bracketMatches?.length ?? 0} partidos</span>
-				{/if}
+				<span class="ml-1 text-xs font-normal text-slate-400">{tab.count} {tab.suffix}</span>
 			</button>
 		{/each}
 	</div>

@@ -101,21 +101,46 @@
 		CHILDREN.set(toId, pair);
 	}
 
-	/** Depth-first leaf (R32) order under a subtree root — defines vertical stacking */
-	function leafOrder(rootId: string): string[] {
+	/** Kickoff time (ms) of a match id, Infinity if unknown */
+	function matchTimeOf(id: string): number {
+		const m = matches.find((mm) => mm.id === id);
+		if (!m) return Infinity;
+		const t = new Date(m.kickoffAt).getTime();
+		return isNaN(t) ? Infinity : t;
+	}
+
+	/** Earliest kickoff among all leaves under a subtree (defines its chrono rank) */
+	function subtreeMinTime(id: string): number {
+		const kids = CHILDREN.get(id);
+		if (!kids) return matchTimeOf(id);
+		return Math.min(...kids.filter((k): k is string => !!k).map(subtreeMinTime));
+	}
+
+	/**
+	 * Leaf (R32) order under a subtree, top→bottom. At every node the two child
+	 * subtrees are ordered by their earliest kickoff, so the column reads roughly
+	 * chronologically (first matches on top) while the bracket tree — and its
+	 * crossing-free connectors — stay intact.
+	 */
+	function leafOrderSorted(rootId: string): string[] {
 		const out: string[] = [];
 		const walk = (id: string) => {
 			const kids = CHILDREN.get(id);
 			if (!kids) { out.push(id); return; }
-			for (const k of kids) if (k) walk(k);
+			const ordered = kids
+				.filter((k): k is string => !!k)
+				.slice()
+				.sort((a, b) => subtreeMinTime(a) - subtreeMinTime(b));
+			for (const k of ordered) walk(k);
 		};
 		walk(rootId);
 		return out;
 	}
 
-	// Left half feeds sf-01, right half feeds sf-02 (true FIFA bracket halves)
-	const LEFT_LEAVES = leafOrder('sf-01');
-	const RIGHT_LEAVES = leafOrder('sf-02');
+	// Left half feeds sf-01, right half feeds sf-02 (true FIFA bracket halves).
+	// Filled chronologically by computeBasePositions (dates come from `matches`).
+	let LEFT_LEAVES: string[] = [];
+	let RIGHT_LEAVES: string[] = [];
 
 	// Which nodes live on the left half (used for connector direction)
 	const LEFT_SET = new Set<string>();
@@ -153,6 +178,10 @@
 	function computeBasePositions(cw: number, ch: number): void {
 		const aspect = cw / ch;
 		basePositions.clear();
+
+		// Order each half chronologically (earliest matches on top)
+		LEFT_LEAVES = leafOrderSorted('sf-01');
+		RIGHT_LEAVES = leafOrderSorted('sf-02');
 
 		const UGAP = CARD_H * 0.5;
 		const vGap = CARD_H + UGAP; // R32 center-to-center spacing
@@ -220,6 +249,15 @@
 		return `${date} · ${time}`;
 	}
 
+	/** True if the match is played today (viewer's local day) */
+	function isToday(iso: string): boolean {
+		if (!iso) return false;
+		const d = new Date(iso);
+		if (isNaN(d.getTime())) return false;
+		const n = new Date();
+		return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
+	}
+
 	// ── Card texture ──
 	function createCardTexture(match: Match, flagA: HTMLImageElement | null, flagB: HTMLImageElement | null): THREE.CanvasTexture {
 		const w = CARD_W, h = CARD_H;
@@ -232,26 +270,45 @@
 
 		const hasResult = match.scoreA !== null && match.scoreB !== null;
 		const isFinal = match.id === 'final';
+		const today = isToday(match.kickoffAt);
+		const winner: 'A' | 'B' | null = !hasResult
+			? null
+			: (match.scoreA! > match.scoreB! ? 'A' : match.scoreB! > match.scoreA! ? 'B' : (match.penaltyWinner ?? null));
 		const stageColor = CARD_STAGE_CLR[match.stage] ?? '#64748b';
 		const headerH = 22, r = 10;
 
+		// Card body
 		ctx.beginPath(); ctx.roundRect(0, 0, w, h, r);
 		ctx.fillStyle = isFinal ? '#fffbeb' : '#ffffff'; ctx.fill();
-		ctx.strokeStyle = hasResult ? '#10b981' : (isFinal ? '#f59e0b' : '#e2e8f0');
-		ctx.lineWidth = hasResult || isFinal ? 2 : 1; ctx.stroke();
 
+		// Border priority: HOY (rojo) > terminado (verde) > final (ámbar) > normal
+		let borderColor = '#e2e8f0', borderW = 1;
+		if (isFinal) { borderColor = '#f59e0b'; borderW = 2; }
+		if (hasResult) { borderColor = '#10b981'; borderW = 2; }
+		if (today) { borderColor = '#ef4444'; borderW = 2.5; }
+		ctx.strokeStyle = borderColor; ctx.lineWidth = borderW; ctx.stroke();
+
+		// Header
 		ctx.beginPath(); ctx.roundRect(0, 0, w, headerH, [r, r, 0, 0]);
 		ctx.fillStyle = stageColor; ctx.fill();
 		ctx.fillStyle = '#fff';
 		ctx.font = 'bold 9px system-ui, -apple-system, sans-serif';
 		ctx.textAlign = 'left';
 		ctx.fillText(CARD_STAGE_LBL[match.stage] ?? match.stage.toUpperCase(), 8, 15);
-		// Kickoff date/time, right-aligned in the header (helps locate matches by fecha)
+
+		// Kickoff date/time (right) + "HOY" pill when applicable
 		const when = formatKickoff(match.kickoffAt);
 		if (when) {
 			ctx.font = '600 8.5px system-ui, -apple-system, sans-serif';
 			ctx.textAlign = 'right';
 			ctx.fillText(when, w - 8, 15);
+			if (today) {
+				const dw = ctx.measureText(when).width;
+				const pillW = 21, pillH = 12, px = w - 8 - dw - 6 - pillW, py = (headerH - pillH) / 2;
+				ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.roundRect(px, py, pillW, pillH, 3); ctx.fill();
+				ctx.fillStyle = '#fff'; ctx.font = 'bold 7px system-ui, -apple-system, sans-serif'; ctx.textAlign = 'center';
+				ctx.fillText('HOY', px + pillW / 2, py + pillH - 3.5);
+			}
 		}
 
 		const top = headerH + 3;
@@ -259,19 +316,30 @@
 
 		for (let i = 0; i < 2; i++) {
 			const y = top + i * rowH;
+			const side: 'A' | 'B' = i === 0 ? 'A' : 'B';
 			const name = i === 0 ? match.teamA : match.teamB;
 			const score = i === 0 ? match.scoreA : match.scoreB;
 			const flag = i === 0 ? flagA : flagB;
+			const isWinner = winner === side;
+			const isLoser = winner !== null && !isWinner;
+
+			// Winner row: light green wash + left accent bar
+			if (isWinner) {
+				ctx.fillStyle = 'rgba(16,185,129,0.14)';
+				ctx.fillRect(3, y, w - 6, rowH);
+				ctx.fillStyle = '#10b981';
+				ctx.fillRect(3, y + 2, 3, rowH - 4);
+			}
 
 			let tx = 10;
-			if (flag) { try { ctx.drawImage(flag, 8, y + (rowH - 16) / 2, 24, 16); tx = 38; } catch { /* */ } }
+			if (flag) { try { ctx.drawImage(flag, 10, y + (rowH - 16) / 2, 24, 16); tx = 40; } catch { /* */ } }
 
-			ctx.fillStyle = '#1e293b';
-			ctx.font = '600 12px system-ui, -apple-system, sans-serif';
+			ctx.fillStyle = isWinner ? '#065f46' : isLoser ? '#94a3b8' : '#1e293b';
+			ctx.font = `${isWinner ? '800' : '600'} 12px system-ui, -apple-system, sans-serif`;
 			ctx.textAlign = 'left';
-			ctx.fillText(name.length > 20 ? name.slice(0, 19) + '…' : name, tx, y + rowH / 2 + 4);
+			ctx.fillText(name.length > 19 ? name.slice(0, 18) + '…' : name, tx, y + rowH / 2 + 4);
 
-			ctx.fillStyle = hasResult ? '#059669' : '#cbd5e1';
+			ctx.fillStyle = hasResult ? (isWinner ? '#059669' : '#94a3b8') : '#cbd5e1';
 			ctx.font = 'bold 15px system-ui, -apple-system, sans-serif';
 			ctx.textAlign = 'center';
 			ctx.fillText(score !== null && score !== undefined ? String(score) : '–', w - 22, y + rowH / 2 + 5);
@@ -281,6 +349,7 @@
 				ctx.beginPath(); ctx.moveTo(8, y + rowH); ctx.lineTo(w - 8, y + rowH); ctx.stroke();
 			}
 		}
+
 		if (match.penaltyWinner) {
 			ctx.fillStyle = '#f59e0b'; ctx.font = 'bold 8px system-ui'; ctx.textAlign = 'center';
 			ctx.fillText(`PEN: ${match.penaltyWinner === 'A' ? match.teamA : match.teamB}`, w / 2, h - 3);

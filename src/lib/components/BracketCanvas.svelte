@@ -210,6 +210,16 @@
 		);
 	}
 
+	/** Format a kickoff ISO date as "dd/mm · HH:mm" in the viewer's local time */
+	function formatKickoff(iso: string): string {
+		if (!iso) return '';
+		const d = new Date(iso);
+		if (isNaN(d.getTime())) return '';
+		const date = d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
+		const time = d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false });
+		return `${date} · ${time}`;
+	}
+
 	// ── Card texture ──
 	function createCardTexture(match: Match, flagA: HTMLImageElement | null, flagB: HTMLImageElement | null): THREE.CanvasTexture {
 		const w = CARD_W, h = CARD_H;
@@ -234,8 +244,15 @@
 		ctx.fillStyle = stageColor; ctx.fill();
 		ctx.fillStyle = '#fff';
 		ctx.font = 'bold 9px system-ui, -apple-system, sans-serif';
-		ctx.textAlign = 'center';
-		ctx.fillText(CARD_STAGE_LBL[match.stage] ?? match.stage.toUpperCase(), w / 2, 15);
+		ctx.textAlign = 'left';
+		ctx.fillText(CARD_STAGE_LBL[match.stage] ?? match.stage.toUpperCase(), 8, 15);
+		// Kickoff date/time, right-aligned in the header (helps locate matches by fecha)
+		const when = formatKickoff(match.kickoffAt);
+		if (when) {
+			ctx.font = '600 8.5px system-ui, -apple-system, sans-serif';
+			ctx.textAlign = 'right';
+			ctx.fillText(when, w - 8, 15);
+		}
 
 		const top = headerH + 3;
 		const rowH = (h - top - 4) / 2;

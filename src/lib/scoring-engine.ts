@@ -46,7 +46,9 @@ export function calculatePredictionPoints(
 	let exactHit = false;
 	let outcomeHit = false;
 	let bracketTeamHit = false;
+	let bracketLoserHit = false;
 	let advancedTeam: string | null = null;
+	let loserTeam: string | null = null;
 
 	if (match.stage === 'groups') {
 		const predictedOutcome = getMatchOutcome(prediction.predA, prediction.predB, match.stage, prediction.predPenaltyWinner);
@@ -55,8 +57,8 @@ export function calculatePredictionPoints(
 		exactHit = exactScore;
 		outcomeHit = !exactHit && predictedOutcome === actualOutcome;
 	} else if (predictedTeams) {
-		const { winner: actualWinner } = resolveWinner(match.teamA, match.teamB, match.scoreA, match.scoreB, match.penaltyWinner);
-		const { winner: predictedWinner } = resolveWinner(
+		const { winner: actualWinner, loser: actualLoser } = resolveWinner(match.teamA, match.teamB, match.scoreA, match.scoreB, match.penaltyWinner);
+		const { winner: predictedWinner, loser: predictedLoser } = resolveWinner(
 			predictedTeams.teamA,
 			predictedTeams.teamB,
 			prediction.predA,
@@ -74,21 +76,45 @@ export function calculatePredictionPoints(
 		const exactPenaltyWinner = match.scoreA !== match.scoreB || sameTeam(predictedPenaltyTeam, actualPenaltyTeam);
 
 		advancedTeam = actualWinner;
+		loserTeam = actualLoser;
 		bracketTeamHit = sameTeam(predictedWinner, actualWinner);
+		if (match.stage === 'semifinal') {
+			bracketLoserHit = sameTeam(predictedLoser, actualLoser);
+		}
 		exactHit = exactTeams && exactScore && exactPenaltyWinner;
 		outcomeHit = !exactHit && exactTeams && bracketTeamHit;
 	}
 
 	const outcomePoints = exactHit || outcomeHit ? stageConfig.outcome : 0;
 	const exactPoints = exactHit ? stageConfig.exact : 0;
-	const bracketPoints = bracketTeamHit ? stageConfig.bracketTeam : 0;
-	const reason = exactHit
+	let bracketPoints = 0;
+	if (bracketTeamHit) bracketPoints += stageConfig.bracketTeam;
+	if (bracketLoserHit) bracketPoints += stageConfig.bracketTeam;
+
+	const hasBracketHit = bracketTeamHit || bracketLoserHit;
+	const baseReason = exactHit
 		? 'Resultado exacto'
 		: outcomeHit
 			? 'Acierto de resultado'
-			: bracketTeamHit
+			: hasBracketHit
 				? 'Equipo que avanza'
 				: 'No acertó';
+
+	let finalReason = baseReason;
+	if (bracketPoints > 0) {
+		const advancedNames: string[] = [];
+		if (bracketTeamHit && advancedTeam) advancedNames.push(advancedTeam);
+		if (bracketLoserHit && loserTeam) advancedNames.push(loserTeam);
+		
+		const advancedStr = advancedNames.join(' y ');
+		const pointsText = `(${bracketPoints}pts)`;
+		
+		if (exactHit || outcomeHit) {
+			finalReason = `${baseReason} + equipo avanza: ${advancedStr} ${pointsText}`;
+		} else {
+			finalReason = `${baseReason}: ${advancedStr} ${pointsText}`;
+		}
+	}
 
 	return {
 		matchId: match.id,
@@ -103,11 +129,7 @@ export function calculatePredictionPoints(
 		exactPoints,
 		bracketPoints,
 		totalPoints: outcomePoints + exactPoints + bracketPoints,
-		reason: bracketPoints > 0 && (exactHit || outcomeHit)
-			? `${reason} + equipo avanza: ${advancedTeam ?? 'equipo'} (${bracketPoints}pts)`
-			: bracketPoints > 0
-				? `${reason}: ${advancedTeam ?? 'equipo'} (${bracketPoints}pts)`
-				: reason,
+		reason: finalReason,
 		exactHit,
 		outcomeHit
 	};

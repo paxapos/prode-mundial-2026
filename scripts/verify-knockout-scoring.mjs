@@ -63,6 +63,62 @@ try {
 	assert.equal(reversedTeamsExact?.exactPoints, 1, 'Debe sumar exacto (bonus 1) aunque los equipos esten invertidos si el marcador por equipo coincide');
 	assert.equal(reversedTeamsExact?.bracketPoints, 2, 'Debe sumar equipo que avanza por ID');
 
+	// Semifinal tests
+	const sfMatch = {
+		id: 'sf1',
+		tournamentId: 'mundial-2026',
+		stage: 'semifinal',
+		groupCode: null,
+		teamA: 'Argentina',
+		teamB: 'Croacia',
+		kickoffAt: '2026-07-10T00:00:00.000Z',
+		venue: null,
+		scoreA: 3,
+		scoreB: 0,
+		penaltyWinner: null,
+		isClosed: true
+	};
+	const sfPrediction = {
+		id: 'psf1',
+		userId: 'u1',
+		tournamentId: 'mundial-2026',
+		matchId: sfMatch.id,
+		predA: 3,
+		predB: 0,
+		predPenaltyWinner: null,
+		createdAt: '2026-01-01T00:00:00.000Z',
+		updatedAt: '2026-01-01T00:00:00.000Z'
+	};
+
+	// 1. Both winner and loser correct
+	const sfBothCorrect = calculatePredictionPoints(sfPrediction, sfMatch, scoringConfig, {
+		teamA: 'Argentina',
+		teamB: 'Croacia'
+	});
+	assert.equal(sfBothCorrect?.bracketPoints, 10, 'Semifinal: Debe sumar 10 puntos (5 + 5) si acierta ganador y perdedor');
+
+	// 2. Winner correct, loser incorrect
+	const sfWinnerCorrect = calculatePredictionPoints(sfPrediction, sfMatch, scoringConfig, {
+		teamA: 'Argentina',
+		teamB: 'Francia'
+	});
+	assert.equal(sfWinnerCorrect?.bracketPoints, 5, 'Semifinal: Debe sumar 5 puntos si acierta solo ganador');
+
+	// 3. Winner incorrect, loser correct (predicted loser is Croatia, actual loser is Croatia)
+	// sfPrediction says predA (teamA: Francia) is 3, predB (teamB: Croacia) is 0. So France is winner, Croatia is loser.
+	const sfLoserCorrect = calculatePredictionPoints(sfPrediction, sfMatch, scoringConfig, {
+		teamA: 'Francia',
+		teamB: 'Croacia'
+	});
+	assert.equal(sfLoserCorrect?.bracketPoints, 5, 'Semifinal: Debe sumar 5 puntos si acierta solo perdedor');
+
+	// 4. Both incorrect
+	const sfBothIncorrect = calculatePredictionPoints(sfPrediction, sfMatch, scoringConfig, {
+		teamA: 'Francia',
+		teamB: 'Brasil'
+	});
+	assert.equal(sfBothIncorrect?.bracketPoints, 0, 'Semifinal: Debe sumar 0 puntos si ambos son incorrectos');
+
 	console.log('OK: scoring de llaves exige identidad de equipos para resultado/exacto y no premia local/visitante sin equipo.');
 } finally {
 	await server.close();
